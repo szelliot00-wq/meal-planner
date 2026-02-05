@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Meal Planner</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="app">
+
+    <!-- ===== HEADER ===== -->
+    <header class="header">
+      <h1>Meal Planner</h1>
+      <div class="header-controls">
+        <label class="start-day-label" for="start-day-select">Week starts:</label>
+        <select class="start-day-select" id="start-day-select">
+          <option value="mon">Monday</option>
+          <option value="tue">Tuesday</option>
+          <option value="wed">Wednesday</option>
+          <option value="thu">Thursday</option>
+          <option value="fri" selected>Friday</option>
+          <option value="sat">Saturday</option>
+          <option value="sun">Sunday</option>
+        </select>
+        <span class="week-label" id="week-label"></span>
+        <span class="unsaved-indicator" id="unsaved-indicator" hidden>Unsaved changes</span>
+        <button class="btn btn-primary" id="save-btn">Save Week</button>
+      </div>
+    </header>
+
+    <!-- ===== MAIN LAYOUT: content + sidebar (meals on RHS) ===== -->
+    <div class="layout">
+
+      <!-- --- Main content: all days stacked --- -->
+      <main class="content" id="week-grid">
+        <!-- Populated by JS: all 7 days stacked vertically -->
+      </main>
+
+      <!-- --- Sidebar on the RIGHT: meal menu + actions --- -->
+      <aside class="sidebar">
+        <h2 class="sidebar-title">Meals</h2>
+        <div class="meal-list" id="meal-list">
+          <!-- Populated by JS: draggable meal cards -->
+        </div>
+
+        <hr class="sidebar-divider">
+
+        <button class="btn btn-accent" id="shopping-list-btn">Generate Shopping List</button>
+        <button class="btn btn-secondary" id="clear-week-btn">Clear All</button>
+
+        <hr class="sidebar-divider">
+
+        <h2 class="sidebar-title">History</h2>
+        <div class="history-list" id="history-list">
+          <!-- Populated by JS: list of past weeks -->
+        </div>
+      </aside>
+    </div>
+
+    <!-- ===== SHOPPING LIST MODAL ===== -->
+    <div class="modal-overlay" id="shopping-modal-overlay" hidden>
+      <div class="modal">
+        <div class="modal-header">
+          <h2>Shopping List — Tesco Weekly Shop</h2>
+          <button class="modal-close" id="shopping-modal-close">&times;</button>
+        </div>
+        <div class="modal-body" id="shopping-list-content">
+          <!-- Populated by JS -->
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-primary" id="copy-list-btn">Copy to Clipboard</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== HISTORY MODAL ===== -->
+    <div class="modal-overlay" id="history-modal-overlay" hidden>
+      <div class="modal">
+        <div class="modal-header">
+          <h2 id="history-modal-title">Past Week Plan</h2>
+          <button class="modal-close" id="history-modal-close">&times;</button>
+        </div>
+        <div class="modal-body" id="history-modal-content">
+          <!-- Populated by JS: read-only view of a past week -->
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-primary" id="copy-week-btn">Copy to Current Week</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>
