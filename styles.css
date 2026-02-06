@@ -447,9 +447,6 @@ body {
 
 /* ── Shopping list items inside the modal ── */
 .shopping-item {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
   padding: 0.5rem 0;
   border-bottom: 1px solid #f1f5f9;
   font-size: 0.9rem;
@@ -457,13 +454,6 @@ body {
 
 .shopping-item:last-child {
   border-bottom: none;
-}
-
-.shopping-item-qty {
-  font-weight: 700;
-  color: #2563eb;
-  min-width: 70px;
-  text-align: right;
 }
 
 .shopping-item-name {
