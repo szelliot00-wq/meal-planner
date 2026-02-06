@@ -145,8 +145,45 @@ body {
   margin: 0.75rem 0;
 }
 
+/* ── Recipe source indicator ── */
+.recipe-source {
+  font-size: 0.65rem;
+  padding: 0.2rem 0.4rem;
+  border-radius: 4px;
+  margin-bottom: 0.4rem;
+  text-align: center;
+}
+
+.recipe-source-sheets {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.recipe-source-default {
+  background: #f1f5f9;
+  color: #64748b;
+}
+
+/* ── Loading state for meal list ── */
+.meals-loading {
+  font-size: 0.75rem;
+  color: #94a3b8;
+  font-style: italic;
+  text-align: center;
+  padding: 1rem 0;
+}
+
+/* ── Refresh Recipes button ── */
+.refresh-recipes-btn {
+  margin-top: 0.4rem;
+  font-size: 0.7rem;
+}
+
 /* ── Draggable meal cards in sidebar ── */
 .meal-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   background: #f8fafc;
   border: 1px solid #e2e8f0;
   border-radius: 8px;
@@ -158,6 +195,41 @@ body {
   margin-bottom: 0.4rem;
   transition: box-shadow 0.2s, transform 0.15s;
   user-select: none;
+}
+
+.meal-card-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Info button on meal cards — opens recipe detail modal */
+.meal-card-info {
+  background: none;
+  border: 1px solid #d1d5db;
+  border-radius: 50%;
+  width: 18px;
+  height: 18px;
+  font-size: 0.6rem;
+  font-weight: 700;
+  font-style: italic;
+  color: #64748b;
+  cursor: pointer;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 0.3rem;
+  transition: all 0.15s;
+  padding: 0;
+  line-height: 1;
+}
+
+.meal-card-info:hover {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #fff;
 }
 
 .meal-card:hover {
@@ -434,6 +506,78 @@ body {
 
 .history-meal-assignments {
   color: #334155;
+}
+
+/* ── Recipe detail modal ── */
+.recipe-timing {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.recipe-time-badge {
+  background: #f1f5f9;
+  color: #475569;
+  padding: 0.25rem 0.6rem;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.recipe-section {
+  margin-bottom: 1.25rem;
+}
+
+.recipe-section-title {
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #64748b;
+  margin-bottom: 0.5rem;
+  padding-bottom: 0.25rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.recipe-instruction {
+  font-size: 0.9rem;
+  color: #334155;
+  margin-bottom: 0.5rem;
+  line-height: 1.6;
+}
+
+.recipe-ingredient {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.3rem 0;
+  border-bottom: 1px solid #f1f5f9;
+  font-size: 0.85rem;
+}
+
+.recipe-ingredient:last-child {
+  border-bottom: none;
+}
+
+.recipe-ingredient-qty {
+  font-weight: 700;
+  color: #2563eb;
+  min-width: 60px;
+  text-align: right;
+}
+
+.recipe-ingredient-name {
+  color: #334155;
+}
+
+.recipe-source-link {
+  font-size: 0.85rem;
+  color: #2563eb;
+  text-decoration: none;
+}
+
+.recipe-source-link:hover {
+  text-decoration: underline;
 }
 
 /* ── Confirmation toast ── */

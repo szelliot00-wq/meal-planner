@@ -7,6 +7,19 @@
 
 // ── SECTION 1: Constants and Data ──────────────
 
+// ── Google Sheets Configuration ──
+// To load recipes from a Google Sheet instead of the defaults below:
+// 1. Create a Google Sheet with two tabs: "Recipes" and "Ingredients"
+//    Recipes columns:  RecipeID | RecipeName | Instructions | PrepTime | CookTime | Source
+//    Ingredients cols: RecipeID | IngredientName | Quantity | Unit
+// 2. Share the sheet as "Anyone with the link" (Viewer)
+// 3. Get a Google Sheets API key from Google Cloud Console
+// 4. Fill in SPREADSHEET_ID and SHEETS_API_KEY below
+// Leave SPREADSHEET_ID as empty string to use the hardcoded fallback meals.
+var SPREADSHEET_ID = '';
+var SHEETS_API_KEY = '';
+var SHEETS_CACHE_TTL = 3600000; // 1 hour in milliseconds
+
 // All 7 days in standard order — we rotate based on startDay setting
 var ALL_DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 var DAY_LABELS = {
@@ -23,15 +36,18 @@ var PEOPLE = ['steve', 'zoe', 'dylan'];
 var PEOPLE_LABELS = { steve: 'Steve', zoe: 'Zoe', dylan: 'Dylan' };
 
 /**
- * MEALS - the menu of available meals.
- * Each meal has an id, name, and list of ingredients.
+ * DEFAULT_MEALS - fallback menu used when Google Sheets is not configured.
+ * Each meal has an id, name, ingredients, and optional recipe details.
  * Ingredient quantities are PER PERSON.
- * These 5 dummy meals will later come from Google Sheets.
  */
-var MEALS = [
+var DEFAULT_MEALS = [
   {
     id: 'spaghetti-bolognese',
     name: 'Spaghetti Bolognese',
+    instructions: '',
+    prepTime: '',
+    cookTime: '',
+    source: '',
     ingredients: [
       { name: 'Spaghetti', quantity: 100, unit: 'g' },
       { name: 'Beef Mince', quantity: 150, unit: 'g' },
@@ -45,6 +61,10 @@ var MEALS = [
   {
     id: 'chicken-stir-fry',
     name: 'Chicken Stir Fry',
+    instructions: '',
+    prepTime: '',
+    cookTime: '',
+    source: '',
     ingredients: [
       { name: 'Chicken Breast', quantity: 150, unit: 'g' },
       { name: 'Egg Noodles', quantity: 100, unit: 'g' },
@@ -58,6 +78,10 @@ var MEALS = [
   {
     id: 'beans-on-toast',
     name: 'Beans on Toast',
+    instructions: '',
+    prepTime: '',
+    cookTime: '',
+    source: '',
     ingredients: [
       { name: 'Baked Beans', quantity: 0.5, unit: 'tin' },
       { name: 'Bread', quantity: 2, unit: 'slices' },
@@ -68,6 +92,10 @@ var MEALS = [
   {
     id: 'salmon-and-veg',
     name: 'Salmon & Roasted Veg',
+    instructions: '',
+    prepTime: '',
+    cookTime: '',
+    source: '',
     ingredients: [
       { name: 'Salmon Fillet', quantity: 1, unit: '' },
       { name: 'Broccoli', quantity: 100, unit: 'g' },
@@ -79,6 +107,10 @@ var MEALS = [
   {
     id: 'omelette',
     name: 'Omelette',
+    instructions: '',
+    prepTime: '',
+    cookTime: '',
+    source: '',
     ingredients: [
       { name: 'Eggs', quantity: 3, unit: '' },
       { name: 'Butter', quantity: 10, unit: 'g' },
@@ -88,6 +120,9 @@ var MEALS = [
     ]
   }
 ];
+
+// Active meals array — populated during initialization from Sheets or defaults
+var MEALS = [];
 
 
 // ── SECTION 2: State ───────────────────────────
@@ -392,6 +427,206 @@ function copyWeekForward(pastPlan) {
 }
 
 
+// ── SECTION 4B: Google Sheets Integration ──────
+
+/**
+ * Build a Google Sheets API v4 URL for fetching a range.
+ * e.g. fetches "Recipes!A:F" or "Ingredients!A:D"
+ */
+function buildSheetsUrl(sheetName, range) {
+  return 'https://sheets.googleapis.com/v4/spreadsheets/' +
+    SPREADSHEET_ID + '/values/' +
+    encodeURIComponent(sheetName + '!' + range) +
+    '?key=' + SHEETS_API_KEY;
+}
+
+/**
+ * Fetch data from a Google Sheet tab.
+ * Returns a promise that resolves to an array of row arrays.
+ * First row is headers.
+ */
+function fetchSheetData(sheetName, range) {
+  var url = buildSheetsUrl(sheetName, range);
+  return fetch(url).then(function(response) {
+    if (!response.ok) {
+      throw new Error('Sheets API error: ' + response.status);
+    }
+    return response.json();
+  }).then(function(data) {
+    return data.values || [];
+  });
+}
+
+/**
+ * Convert a recipe name to a URL-friendly slug ID.
+ * e.g. "Spaghetti Bolognese" -> "spaghetti-bolognese"
+ * Used as fallback when RecipeID column is empty.
+ */
+function slugify(text) {
+  return text.toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
+}
+
+/**
+ * Transform raw Google Sheets data (two sheets) into the MEALS array format.
+ * Looks up columns by header name so column order doesn't matter.
+ */
+function transformSheetData(recipesRows, ingredientsRows) {
+  if (recipesRows.length < 2) return [];
+
+  // Find column indices from the Recipes header row
+  var rHeader = recipesRows[0].map(function(h) { return h.trim(); });
+  var rCols = {
+    id: rHeader.indexOf('RecipeID'),
+    name: rHeader.indexOf('RecipeName'),
+    instructions: rHeader.indexOf('Instructions'),
+    prepTime: rHeader.indexOf('PrepTime'),
+    cookTime: rHeader.indexOf('CookTime'),
+    source: rHeader.indexOf('Source')
+  };
+
+  // Find column indices from the Ingredients header row
+  var iHeader = ingredientsRows.length > 0
+    ? ingredientsRows[0].map(function(h) { return h.trim(); })
+    : [];
+  var iCols = {
+    recipeId: iHeader.indexOf('RecipeID'),
+    name: iHeader.indexOf('IngredientName'),
+    quantity: iHeader.indexOf('Quantity'),
+    unit: iHeader.indexOf('Unit')
+  };
+
+  // Build a map of RecipeID -> array of ingredient objects
+  var ingredientMap = {};
+  for (var i = 1; i < ingredientsRows.length; i++) {
+    var row = ingredientsRows[i];
+    var recipeId = (iCols.recipeId >= 0 && row[iCols.recipeId]) ? row[iCols.recipeId].trim() : '';
+    if (!recipeId) continue;
+
+    if (!ingredientMap[recipeId]) {
+      ingredientMap[recipeId] = [];
+    }
+
+    ingredientMap[recipeId].push({
+      name: (iCols.name >= 0 && row[iCols.name]) ? row[iCols.name].trim() : '',
+      quantity: (iCols.quantity >= 0 && row[iCols.quantity]) ? parseFloat(row[iCols.quantity]) || 0 : 0,
+      unit: (iCols.unit >= 0 && row[iCols.unit]) ? row[iCols.unit].trim() : ''
+    });
+  }
+
+  // Build the meals array from recipe rows
+  var meals = [];
+  for (var j = 1; j < recipesRows.length; j++) {
+    var r = recipesRows[j];
+    var id = (rCols.id >= 0 && r[rCols.id]) ? r[rCols.id].trim() : '';
+    var name = (rCols.name >= 0 && r[rCols.name]) ? r[rCols.name].trim() : '';
+
+    // Skip rows with no recipe name
+    if (!name) continue;
+
+    // Auto-generate ID from name if RecipeID column is empty
+    if (!id) {
+      id = slugify(name);
+    }
+
+    meals.push({
+      id: id,
+      name: name,
+      instructions: (rCols.instructions >= 0 && r[rCols.instructions]) ? r[rCols.instructions] : '',
+      prepTime: (rCols.prepTime >= 0 && r[rCols.prepTime]) ? r[rCols.prepTime].trim() : '',
+      cookTime: (rCols.cookTime >= 0 && r[rCols.cookTime]) ? r[rCols.cookTime].trim() : '',
+      source: (rCols.source >= 0 && r[rCols.source]) ? r[rCols.source].trim() : '',
+      ingredients: ingredientMap[id] || []
+    });
+  }
+
+  return meals;
+}
+
+/**
+ * Get cached meals from localStorage if the cache is still valid.
+ * Returns the cached meals array, or null if expired/missing.
+ */
+function getCachedMeals() {
+  try {
+    var cached = JSON.parse(localStorage.getItem('mealPlannerRecipeCache'));
+    if (cached && cached.timestamp && cached.meals) {
+      var age = Date.now() - cached.timestamp;
+      if (age < SHEETS_CACHE_TTL) {
+        return cached.meals;
+      }
+    }
+  } catch (e) { /* ignore */ }
+  return null;
+}
+
+/**
+ * Save meals to the localStorage cache with a timestamp.
+ */
+function setCachedMeals(meals) {
+  try {
+    localStorage.setItem('mealPlannerRecipeCache', JSON.stringify({
+      timestamp: Date.now(),
+      meals: meals
+    }));
+  } catch (e) { /* fail silently */ }
+}
+
+/**
+ * Clear the cached meals (used by the "Refresh Recipes" button).
+ */
+function clearMealsCache() {
+  try {
+    localStorage.removeItem('mealPlannerRecipeCache');
+  } catch (e) { /* ignore */ }
+}
+
+/**
+ * Load meals from Google Sheets (with caching) or fall back to defaults.
+ * Calls the provided callback with the meals array when done.
+ */
+function loadMeals(callback) {
+  // If Google Sheets is not configured, use defaults immediately
+  if (!SPREADSHEET_ID || !SHEETS_API_KEY) {
+    callback(DEFAULT_MEALS);
+    return;
+  }
+
+  // Check cache first
+  var cached = getCachedMeals();
+  if (cached && cached.length > 0) {
+    callback(cached);
+    return;
+  }
+
+  // Fetch both sheets in parallel
+  var recipesPromise = fetchSheetData('Recipes', 'A:F');
+  var ingredientsPromise = fetchSheetData('Ingredients', 'A:D');
+
+  Promise.all([recipesPromise, ingredientsPromise])
+    .then(function(results) {
+      var meals = transformSheetData(results[0], results[1]);
+
+      if (meals.length === 0) {
+        showToast('No recipes found in Google Sheet — using defaults');
+        callback(DEFAULT_MEALS);
+        return;
+      }
+
+      // Cache the transformed data
+      setCachedMeals(meals);
+      showToast('Loaded ' + meals.length + ' recipes from Google Sheets');
+      callback(meals);
+    })
+    .catch(function(error) {
+      console.error('Failed to load from Google Sheets:', error);
+      showToast('Could not load recipes from Google Sheets — using defaults');
+      callback(DEFAULT_MEALS);
+    });
+}
+
+
 // ── SECTION 5: Shopping List Logic ─────────────
 
 /**
@@ -489,6 +724,7 @@ function copyShoppingListToClipboard() {
 
 /**
  * Render the sidebar meal list with draggable cards.
+ * Each card has an optional info button to view recipe details.
  */
 function renderMealList() {
   var container = document.getElementById('meal-list');
@@ -497,8 +733,26 @@ function renderMealList() {
   MEALS.forEach(function(meal) {
     var card = document.createElement('div');
     card.className = 'meal-card';
-    card.textContent = meal.name;
     card.draggable = true;
+
+    // Meal name text
+    var nameSpan = document.createElement('span');
+    nameSpan.className = 'meal-card-name';
+    nameSpan.textContent = meal.name;
+    card.appendChild(nameSpan);
+
+    // Info button — shown if the meal has any detail (instructions, timing, or source)
+    if (meal.instructions || meal.prepTime || meal.cookTime || meal.source) {
+      var infoBtn = document.createElement('button');
+      infoBtn.className = 'meal-card-info';
+      infoBtn.textContent = 'i';
+      infoBtn.title = 'View recipe';
+      infoBtn.addEventListener('click', function(e) {
+        e.stopPropagation(); // don't interfere with drag
+        showRecipeModal(meal.id);
+      });
+      card.appendChild(infoBtn);
+    }
 
     card.addEventListener('dragstart', function(e) {
       e.dataTransfer.setData('text/plain', meal.id);
@@ -516,6 +770,89 @@ function renderMealList() {
 
     container.appendChild(card);
   });
+}
+
+/**
+ * Show the recipe detail modal for a given meal.
+ * Displays name, timing, instructions, ingredients, and source link.
+ */
+function showRecipeModal(mealId) {
+  var meal = findMeal(mealId);
+  if (!meal) return;
+
+  // Set the modal title
+  document.getElementById('recipe-modal-title').textContent = meal.name;
+
+  // Build the body content
+  var html = '';
+
+  // Timing badges (prep + cook)
+  if (meal.prepTime || meal.cookTime) {
+    html += '<div class="recipe-timing">';
+    if (meal.prepTime) {
+      html += '<span class="recipe-time-badge">Prep: ' + meal.prepTime + '</span>';
+    }
+    if (meal.cookTime) {
+      html += '<span class="recipe-time-badge">Cook: ' + meal.cookTime + '</span>';
+    }
+    html += '</div>';
+  }
+
+  // Cooking instructions (split on newlines)
+  if (meal.instructions) {
+    html += '<div class="recipe-section">';
+    html += '<h3 class="recipe-section-title">Instructions</h3>';
+    var paragraphs = meal.instructions.split('\n');
+    for (var i = 0; i < paragraphs.length; i++) {
+      var line = paragraphs[i].trim();
+      if (line) {
+        html += '<p class="recipe-instruction">' + line + '</p>';
+      }
+    }
+    html += '</div>';
+  }
+
+  // Ingredients list (per person)
+  if (meal.ingredients && meal.ingredients.length > 0) {
+    html += '<div class="recipe-section">';
+    html += '<h3 class="recipe-section-title">Ingredients (per person)</h3>';
+    meal.ingredients.forEach(function(ing) {
+      html += '<div class="recipe-ingredient">' +
+        '<span class="recipe-ingredient-qty">' + formatQuantity(ing.quantity, ing.unit) + '</span>' +
+        '<span class="recipe-ingredient-name">' + ing.name + '</span>' +
+        '</div>';
+    });
+    html += '</div>';
+  }
+
+  // Source link (e.g. TikTok URL, recipe blog)
+  if (meal.source) {
+    html += '<div class="recipe-section">';
+    html += '<a class="recipe-source-link" href="' + meal.source + '" target="_blank" rel="noopener">View original recipe</a>';
+    html += '</div>';
+  }
+
+  document.getElementById('recipe-modal-content').innerHTML = html;
+  document.getElementById('recipe-modal-overlay').hidden = false;
+}
+
+/**
+ * Update the recipe source indicator in the sidebar.
+ * Shows whether recipes come from Google Sheets or hardcoded defaults.
+ */
+function updateRecipeSource() {
+  var el = document.getElementById('recipe-source');
+  if (!el) return;
+
+  if (SPREADSHEET_ID && SHEETS_API_KEY) {
+    el.textContent = 'From Google Sheets';
+    el.className = 'recipe-source recipe-source-sheets';
+    document.getElementById('refresh-recipes-btn').hidden = false;
+  } else {
+    el.textContent = 'Using default recipes';
+    el.className = 'recipe-source recipe-source-default';
+    document.getElementById('refresh-recipes-btn').hidden = true;
+  }
 }
 
 /**
@@ -840,11 +1177,39 @@ document.getElementById('history-modal-overlay').addEventListener('click', funct
   if (e.target === this) this.hidden = true;
 });
 
+// Close recipe detail modal
+document.getElementById('recipe-modal-close').addEventListener('click', function() {
+  document.getElementById('recipe-modal-overlay').hidden = true;
+});
+document.getElementById('recipe-modal-done').addEventListener('click', function() {
+  document.getElementById('recipe-modal-overlay').hidden = true;
+});
+
+// Close recipe modal on overlay click
+document.getElementById('recipe-modal-overlay').addEventListener('click', function(e) {
+  if (e.target === this) this.hidden = true;
+});
+
+// Refresh Recipes button — clears cache and re-fetches from Google Sheets
+document.getElementById('refresh-recipes-btn').addEventListener('click', function() {
+  clearMealsCache();
+  var mealListEl = document.getElementById('meal-list');
+  mealListEl.innerHTML = '<div class="meals-loading">Refreshing recipes...</div>';
+
+  loadMeals(function(meals) {
+    MEALS = meals;
+    renderMealList();
+    renderWeekGrid();
+    updateRecipeSource();
+  });
+});
+
 // Close modals on Escape key
 document.addEventListener('keydown', function(e) {
   if (e.key === 'Escape') {
     document.getElementById('shopping-modal-overlay').hidden = true;
     document.getElementById('history-modal-overlay').hidden = true;
+    document.getElementById('recipe-modal-overlay').hidden = true;
   }
 });
 
@@ -856,24 +1221,34 @@ document.getElementById('start-day-select').addEventListener('change', function(
 
 // ── SECTION 10: Initialization ────────────────
 
-// Load start day preference
-startDay = loadStartDay();
+/**
+ * Initialize the app. Loads meals (potentially async from Google Sheets),
+ * then renders everything once data is ready.
+ */
+function initApp() {
+  // Load synchronous settings first
+  startDay = loadStartDay();
+  document.getElementById('start-day-select').value = startDay;
+  currentPlan = loadOnStartup();
+  updateWeekLabel();
+  updateUnsavedIndicator();
+  renderHistory();
 
-// Set the dropdown to match the saved preference
-document.getElementById('start-day-select').value = startDay;
+  // Show loading state in the sidebar meal list (only if Sheets is configured)
+  if (SPREADSHEET_ID && SHEETS_API_KEY) {
+    var mealListEl = document.getElementById('meal-list');
+    mealListEl.innerHTML = '<div class="meals-loading">Loading recipes...</div>';
+  }
 
-// Load saved plan (draft > current week > empty)
-currentPlan = loadOnStartup();
+  // Load meals (async if Google Sheets configured, sync otherwise)
+  loadMeals(function(meals) {
+    MEALS = meals;
+    renderMealList();
+    renderWeekGrid();
+    updateRecipeSource();
+    console.log('Meal Planner loaded (' + MEALS.length + ' recipes)');
+  });
+}
 
-// Set the week label in the header
-updateWeekLabel();
-
-// Show/hide the unsaved changes indicator
-updateUnsavedIndicator();
-
-// Render everything
-renderMealList();
-renderWeekGrid();
-renderHistory();
-
-console.log('Meal Planner loaded');
+// Start the app
+initApp();

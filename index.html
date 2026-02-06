@@ -40,9 +40,11 @@
       <!-- --- Sidebar on the RIGHT: meal menu + actions --- -->
       <aside class="sidebar">
         <h2 class="sidebar-title">Meals</h2>
+        <div class="recipe-source" id="recipe-source"></div>
         <div class="meal-list" id="meal-list">
           <!-- Populated by JS: draggable meal cards -->
         </div>
+        <button class="btn btn-secondary refresh-recipes-btn" id="refresh-recipes-btn" hidden>Refresh Recipes</button>
 
         <hr class="sidebar-divider">
 
@@ -86,6 +88,22 @@
         </div>
         <div class="modal-footer">
           <button class="btn btn-primary" id="copy-week-btn">Copy to Current Week</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== RECIPE DETAIL MODAL ===== -->
+    <div class="modal-overlay" id="recipe-modal-overlay" hidden>
+      <div class="modal">
+        <div class="modal-header">
+          <h2 id="recipe-modal-title">Recipe</h2>
+          <button class="modal-close" id="recipe-modal-close">&times;</button>
+        </div>
+        <div class="modal-body" id="recipe-modal-content">
+          <!-- Populated by JS: recipe details -->
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" id="recipe-modal-done">Close</button>
         </div>
       </div>
     </div>
