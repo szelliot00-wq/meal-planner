@@ -28,7 +28,11 @@ To load recipes from a Google Sheet:
 1. Create a Google Sheet with two tabs:
    - **Recipes** — columns: `RecipeID | RecipeName | Instructions | PrepTime | CookTime | Source`
    - **Ingredients** — columns: `RecipeID | IngredientName | Quantity | Unit`
-2. Ingredient quantities should be PER PERSON (same as the default meals)
+2. Ingredient column format:
+   - `Quantity` = **numeric string** (e.g. `"100"`, `"2"`, `"0.5"`) — no units embedded
+   - `Unit` = **unit string** (e.g. `"g"`, `"ml"`, `"tsp"`, `"tbsp"`, or `""` for countable items)
+   - All quantities are **per person**
+   - This matches the format written by the `tiktok-recipe-pipeline`
 3. Share the sheet as "Anyone with the link" (Viewer access)
 4. Get a Google Sheets API key:
    - Go to Google Cloud Console (console.cloud.google.com)
@@ -39,6 +43,15 @@ To load recipes from a Google Sheet:
 5. Open `app.js` and fill in `SPREADSHEET_ID` and `SHEETS_API_KEY` at the top
 6. Recipes are cached in localStorage for 1 hour. Click "Refresh Recipes" in the sidebar to force re-fetch.
 7. If the sheet is unavailable or not configured, the app falls back to the 5 default meals.
+
+## Shopping list format
+Ingredients from all sources (Google Sheets and DEFAULT_MEALS) use the same unified format:
+`{ name: string, quantity: number, unit: string }`
+
+The shopping list merges by `name + unit`, sums quantities, and displays as:
+- `"300g Beef Mince"` — units that attach without a space: g, kg, ml, l
+- `"2 tbsp Soy Sauce"` — other units get a space
+- `"3 Eggs"` — no unit
 
 ## Rules
 - Keep things simple. No unnecessary libraries or frameworks.

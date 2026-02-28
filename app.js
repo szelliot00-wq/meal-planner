@@ -508,15 +508,15 @@ function transformSheetData(recipesRows, ingredientsRows) {
       ingredientMap[recipeId] = [];
     }
 
-    // Quantity column = size description (e.g. "500g", "1 tin")
-    // Unit column = how many of that item per person (e.g. "1", "2")
+    // Quantity column = numeric quantity per person (e.g. "100", "2", "0.5")
+    // Unit column = unit string (e.g. "g", "tsp", "ml", "")
     var rawQty = (iCols.quantity >= 0 && row[iCols.quantity]) ? row[iCols.quantity].trim() : '';
     var rawUnit = (iCols.unit >= 0 && row[iCols.unit]) ? row[iCols.unit].trim() : '';
 
     ingredientMap[recipeId].push({
       name: (iCols.name >= 0 && row[iCols.name]) ? row[iCols.name].trim() : '',
-      size: rawQty,                           // e.g. "500g", "1 tin" — descriptive pack size
-      count: parseFloat(rawUnit) || 1         // how many per person (defaults to 1)
+      quantity: parseFloat(rawQty) || 0,      // numeric quantity per person
+      unit: rawUnit                            // unit string: "g", "tsp", "ml", "" etc
     });
   }
 
@@ -636,10 +636,8 @@ function loadMeals(callback) {
 
 /**
  * Generate a consolidated shopping list from the current plan.
- * Iterates all slots, merges duplicate ingredients.
- * Handles two ingredient formats:
- *   - Default meals: { name, quantity (number), unit (string) }
- *   - Google Sheets:  { name, size (string like "500g"), count (number) }
+ * Iterates all slots, merges duplicate ingredients by name+unit, sums quantities.
+ * All ingredient sources use the same format: { name, quantity (number), unit (string) }
  */
 function generateShoppingList(plan) {
   var consolidated = {};
@@ -655,59 +653,21 @@ function generateShoppingList(plan) {
         if (!meal) return;
 
         meal.ingredients.forEach(function(ing) {
-          if (ing.size !== undefined) {
-            // Google Sheets format: { name, size ("500g"), count (1) }
-            // Merge by name+size, sum counts
-            var mapKey = ing.name.toLowerCase() + '|' + ing.size.toLowerCase();
-            if (consolidated[mapKey]) {
-              consolidated[mapKey].count += ing.count;
-            } else {
-              consolidated[mapKey] = {
-                name: ing.name,
-                size: ing.size,
-                count: ing.count
-              };
-            }
+          // Unified format: { name, quantity (number), unit (string) }
+          // Merge by name+unit, sum quantities
+          var mapKey = ing.name.toLowerCase() + '|' + (ing.unit || '');
+          if (consolidated[mapKey]) {
+            consolidated[mapKey].quantity += ing.quantity;
           } else {
-            // Default meals format: { name, quantity (number), unit (string) }
-            // Merge by name+unit, sum quantities, then display as "Nx Name (totalUnit)"
-            var mapKey2 = ing.name.toLowerCase() + '|' + ing.unit;
-            if (consolidated[mapKey2]) {
-              consolidated[mapKey2]._rawQty += ing.quantity;
-            } else {
-              consolidated[mapKey2] = {
-                name: ing.name,
-                size: '',   // computed after totalling
-                count: 0,   // computed after totalling
-                _rawQty: ing.quantity,
-                _unit: ing.unit
-              };
-            }
+            consolidated[mapKey] = {
+              name: ing.name,
+              quantity: ing.quantity,
+              unit: ing.unit || ''
+            };
           }
         });
       });
     });
-  });
-
-  // Post-process default meal entries: convert raw quantity+unit into count+size
-  Object.keys(consolidated).forEach(function(k) {
-    var item = consolidated[k];
-    if (item._rawQty !== undefined) {
-      var total = Math.round(item._rawQty * 10) / 10;
-      var totalStr = (total % 1 === 0) ? String(Math.round(total)) : String(total);
-
-      if (item._unit) {
-        // Has a unit like g, tin, slices — show as "1x Name (300g)"
-        item.count = 1;
-        item.size = totalStr + item._unit;
-      } else {
-        // No unit — just a count like eggs, onions — show as "3x Eggs"
-        item.count = total;
-        item.size = '';
-      }
-      delete item._rawQty;
-      delete item._unit;
-    }
   });
 
   var list = Object.keys(consolidated).map(function(k) {
@@ -721,19 +681,23 @@ function generateShoppingList(plan) {
 }
 
 /**
- * Format a shopping list item as "Nx Ingredient (size)".
- * e.g. "1x Mince 5% (500g)" or "3x Eggs"
- * Each item has: name, count (number), size (string, may be empty).
+ * Format a shopping list item.
+ * e.g. "300g Beef Mince", "2 tbsp Soy Sauce", "3 Eggs"
+ * Each item has: name, quantity (number), unit (string, may be empty).
  */
 function formatShoppingItem(item) {
-  var c = Math.round(item.count * 10) / 10;
-  var cStr = (c % 1 === 0) ? String(Math.round(c)) : String(c);
+  var q = Math.round(item.quantity * 10) / 10;
+  var qStr = (q % 1 === 0) ? String(Math.round(q)) : String(q);
 
-  // "Nx Name (size)" or "Nx Name" if no size
-  if (item.size) {
-    return cStr + 'x ' + item.name + ' (' + item.size + ')';
+  // Units that attach directly without a space (e.g. "300g Mince", "1.5l Water")
+  var noSpace = ['g', 'kg', 'ml', 'l'];
+  if (item.unit && noSpace.indexOf(item.unit) !== -1) {
+    return qStr + item.unit + ' ' + item.name;
   }
-  return cStr + 'x ' + item.name;
+  if (item.unit) {
+    return qStr + ' ' + item.unit + ' ' + item.name;
+  }
+  return qStr + ' ' + item.name;
 }
 
 /**
@@ -880,10 +844,7 @@ function showRecipeModal(mealId) {
     html += '<div class="recipe-section">';
     html += '<h3 class="recipe-section-title">Ingredients (per person)</h3>';
     meal.ingredients.forEach(function(ing) {
-      // Show size for Sheets ingredients, or formatted quantity for defaults
-      var qtyText = ing.size !== undefined
-        ? (ing.count > 1 ? ing.count + 'x ' : '') + ing.size
-        : formatQuantity(ing.quantity, ing.unit);
+      var qtyText = formatQuantity(ing.quantity, ing.unit);
 
       html += '<div class="recipe-ingredient">' +
         '<span class="recipe-ingredient-qty">' + qtyText + '</span>' +
