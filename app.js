@@ -1333,17 +1333,15 @@ function showPendingModal() {
           approveBtn.textContent = 'Approve';
           (function(id) {
             approveBtn.addEventListener('click', function() {
-              approveBtn.disabled = true;
+              // Remove card immediately, fire API in background
+              document.getElementById('pending-card-' + id).remove();
+              decrementPendingBadge();
+              clearMealsCache();
+              if (!document.querySelector('.pending-card')) {
+                content.innerHTML = '<p class="pending-empty">No recipes to review.</p>';
+              }
               fetch(API_BASE + '/approve/' + id, { method: 'POST' })
-                .then(function() {
-                  document.getElementById('pending-card-' + id).remove();
-                  decrementPendingBadge();
-                  clearMealsCache(); // force sidebar to reload with new recipe
-                  if (!document.querySelector('.pending-card')) {
-                    content.innerHTML = '<p class="pending-empty">No recipes to review.</p>';
-                  }
-                })
-                .catch(function() { showToast('Approve failed — try again'); approveBtn.disabled = false; });
+                .catch(function() { showToast('Approve may have failed — check the sheet'); });
             });
           })(item.recipe_id);
           actions.appendChild(approveBtn);
@@ -1355,16 +1353,14 @@ function showPendingModal() {
         rejectBtn.textContent = 'Reject';
         (function(id) {
           rejectBtn.addEventListener('click', function() {
-            rejectBtn.disabled = true;
+            // Remove card immediately, fire API in background
+            document.getElementById('pending-card-' + id).remove();
+            decrementPendingBadge();
+            if (!document.querySelector('.pending-card')) {
+              content.innerHTML = '<p class="pending-empty">No recipes to review.</p>';
+            }
             fetch(API_BASE + '/pending/' + id, { method: 'DELETE' })
-              .then(function() {
-                document.getElementById('pending-card-' + id).remove();
-                decrementPendingBadge();
-                if (!document.querySelector('.pending-card')) {
-                  content.innerHTML = '<p class="pending-empty">No recipes to review.</p>';
-                }
-              })
-              .catch(function() { showToast('Reject failed — try again'); rejectBtn.disabled = false; });
+              .catch(function() { showToast('Reject may have failed — check the sheet'); });
           });
         })(item.recipe_id);
         actions.appendChild(rejectBtn);
