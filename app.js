@@ -328,7 +328,7 @@ function loadStartDay() {
       return saved;
     }
   } catch (e) { /* ignore */ }
-  return 'mon'; // default to Monday
+  return 'sat'; // default to Saturday
 }
 
 /**
@@ -1393,13 +1393,17 @@ function decrementPendingBadge() {
 
 /**
  * Submit a food request to the pipeline API.
+ * Includes the requesting person's name as a prefix on the recipe name.
  * On success closes the modal and shows a confirmation toast.
  */
 function submitFoodRequest(name) {
+  var whoEl = document.querySelector('input[name="request-who"]:checked');
+  var who = whoEl ? whoEl.value : '';
+  var fullName = who ? who + ': ' + name : name;
   fetch(API_BASE + '/request', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name: name })
+    body: JSON.stringify({ name: fullName })
   })
     .then(function(r) { return r.json(); })
     .then(function() {

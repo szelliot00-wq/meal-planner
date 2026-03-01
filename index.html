@@ -42,13 +42,13 @@
 
       <!-- --- Sidebar on the RIGHT: meal menu + actions --- -->
       <aside class="sidebar">
+        <button class="btn btn-request" id="food-request-btn">+ New Food Request</button>
         <h2 class="sidebar-title">Meals</h2>
         <div class="recipe-source" id="recipe-source"></div>
         <div class="meal-list" id="meal-list">
           <!-- Populated by JS: draggable meal cards -->
         </div>
         <button class="btn btn-secondary refresh-recipes-btn" id="refresh-recipes-btn" hidden>Refresh Recipes</button>
-        <button class="btn btn-request" id="food-request-btn">+ New Food Request</button>
 
         <hr class="sidebar-divider">
 
@@ -120,6 +120,14 @@
           <button class="modal-close" id="request-modal-close">&times;</button>
         </div>
         <div class="modal-body">
+          <div class="request-who">
+            <label class="request-who-label">
+              <input type="radio" name="request-who" value="Dylan" checked> Dylan
+            </label>
+            <label class="request-who-label">
+              <input type="radio" name="request-who" value="Zoe"> Zoe
+            </label>
+          </div>
           <input type="text" id="request-food-input" class="request-food-input"
             placeholder="What do you want to eat?" autocomplete="off">
         </div>
