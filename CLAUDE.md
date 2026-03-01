@@ -61,6 +61,7 @@ Recipes tab columns: `RecipeID | RecipeName | Instructions | PrepTime | CookTime
 - `Y` in H/I/J marks a meal as a default favourite for that person
 - Recipe cache is cleared on every page load — always fetches fresh from Sheets
 - Falls back to 5 hardcoded default meals if Sheets not configured
+- Duplicate RecipeIDs are detected and made unique automatically (original ID + row index); a `console.warn` is logged to help identify bad sheet data
 
 ## Recipe approval workflow
 New TikTok recipes land in the **Pending** Google Sheet tab, not Recipes. The pipeline server handles the review API.
