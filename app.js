@@ -325,7 +325,7 @@ function loadStartDay() {
       return saved;
     }
   } catch (e) { /* ignore */ }
-  return 'sat'; // default to Saturday
+  return 'mon'; // default to Monday
 }
 
 /**
