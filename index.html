@@ -13,19 +13,14 @@
     <header class="header">
       <h1>Meal Planner</h1>
       <div class="header-controls">
-        <label class="start-day-label" for="start-day-select">Week starts:</label>
-        <select class="start-day-select" id="start-day-select">
-          <option value="mon">Monday</option>
-          <option value="tue">Tuesday</option>
-          <option value="wed">Wednesday</option>
-          <option value="thu">Thursday</option>
-          <option value="fri" selected>Friday</option>
-          <option value="sat">Saturday</option>
-          <option value="sun">Sunday</option>
-        </select>
-        <span class="week-label" id="week-label"></span>
-        <span class="unsaved-indicator" id="unsaved-indicator" hidden>Unsaved changes</span>
-        <button class="btn btn-primary" id="save-btn">Save Week</button>
+        <div class="viewing-as" id="viewing-as"></div>
+        <button class="btn btn-request header-btn" id="food-request-btn">+ Request</button>
+        <div class="week-dropdown" id="week-dropdown">
+          <button class="week-dropdown-btn" id="week-dropdown-btn">
+            <span id="week-label"></span><span class="week-caret"> ▾</span>
+          </button>
+          <div class="week-dropdown-menu" id="week-dropdown-menu" hidden></div>
+        </div>
       </div>
     </header>
 
@@ -39,24 +34,10 @@
 
       <!-- --- Sidebar on the RIGHT: meal menu + actions --- -->
       <aside class="sidebar">
-        <button class="btn btn-request" id="food-request-btn">+ New Food Request</button>
         <h2 class="sidebar-title">Meals</h2>
-        <div class="recipe-source" id="recipe-source"></div>
+        <input type="text" id="meal-search" class="meal-search" placeholder="Filter meals..." autocomplete="off">
         <div class="meal-list" id="meal-list">
           <!-- Populated by JS: draggable meal cards -->
-        </div>
-        <button class="btn btn-secondary refresh-recipes-btn" id="refresh-recipes-btn" hidden>Refresh Recipes</button>
-
-        <hr class="sidebar-divider">
-
-        <button class="btn btn-accent" id="shopping-list-btn">Generate Shopping List</button>
-        <button class="btn btn-secondary" id="clear-week-btn">Clear All</button>
-
-        <hr class="sidebar-divider">
-
-        <h2 class="sidebar-title">History</h2>
-        <div class="history-list" id="history-list">
-          <!-- Populated by JS: list of past weeks -->
         </div>
       </aside>
     </div>
@@ -119,10 +100,10 @@
         <div class="modal-body">
           <div class="request-who">
             <label class="request-who-label">
-              <input type="radio" name="request-who" value="Dylan" checked> Dylan
+              <input type="radio" name="request-who" value="Dylan" checked> Dyl-Boi
             </label>
             <label class="request-who-label">
-              <input type="radio" name="request-who" value="Zoe"> Zoe
+              <input type="radio" name="request-who" value="Zoe"> Zbutt
             </label>
           </div>
           <input type="text" id="request-food-input" class="request-food-input"
@@ -149,6 +130,35 @@
         </div>
       </div>
     </div>
+
+    <!-- ===== PERSON SELECTOR MODAL ===== -->
+    <div class="modal-overlay" id="person-selector-overlay" hidden>
+      <div class="modal person-selector-modal">
+        <div class="modal-header">
+          <h2>Who are you?</h2>
+          <button class="modal-close" id="person-selector-close">&times;</button>
+        </div>
+        <div class="modal-body person-selector-body">
+          <button class="person-btn" data-person="steve">Daddy</button>
+          <button class="person-btn" data-person="zoe">Zbutt</button>
+          <button class="person-btn" data-person="dylan">Dyl-Boi</button>
+        </div>
+      </div>
+    </div>
+
+  <!-- Week start-day selector — fixed at bottom right, discreet -->
+  <div class="start-day-fab">
+    <span class="start-day-fab-label">Starts</span>
+    <select class="start-day-select" id="start-day-select">
+      <option value="mon">Mon</option>
+      <option value="tue">Tue</option>
+      <option value="wed">Wed</option>
+      <option value="thu">Thu</option>
+      <option value="fri" selected>Fri</option>
+      <option value="sat">Sat</option>
+      <option value="sun">Sun</option>
+    </select>
+  </div>
 
   <!-- Pending review button — fixed at bottom, discreet -->
   <button class="pending-fab" id="pending-btn" hidden>

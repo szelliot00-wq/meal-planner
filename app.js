@@ -36,7 +36,7 @@ var MEAL_LABELS = { lunch: 'Lunch', dinner: 'Dinner' };
 
 // People in the household
 var PEOPLE = ['steve', 'zoe', 'dylan'];
-var PEOPLE_LABELS = { steve: 'Steve', zoe: 'Zoe', dylan: 'Dylan' };
+var PEOPLE_LABELS = { steve: 'Daddy', zoe: 'Zbutt', dylan: 'Dyl-Boi' };
 
 /**
  * DEFAULT_MEALS - fallback menu used when Google Sheets is not configured.
@@ -136,8 +136,14 @@ var currentPlan = {};
 // Which day the week starts on (configurable, default Friday)
 var startDay = 'fri';
 
-// Track whether there are unsaved changes
-var hasUnsavedChanges = false;
+// Current person viewing the planner ('steve' | 'zoe' | 'dylan' | null)
+var currentUser = null;
+
+// Per-person meal favourite counts: { steve: { mealId: count }, ... }
+var favourites = {};
+
+// Current text in the meal search/filter input
+var mealFilter = '';
 
 
 // ── SECTION 3: Utility Functions ───────────────
@@ -299,15 +305,6 @@ function showToast(message) {
 // ── SECTION 4: Persistence (localStorage) ──────
 
 /**
- * Save the current plan as a draft (auto-called on every change).
- */
-function saveDraft() {
-  try {
-    localStorage.setItem('mealPlannerDraft', JSON.stringify(currentPlan));
-  } catch (e) { /* fail silently */ }
-}
-
-/**
  * Save start day preference to localStorage.
  */
 function saveStartDay() {
@@ -330,7 +327,7 @@ function loadStartDay() {
 }
 
 /**
- * Save the current plan to history (manual "Save Week" action).
+ * Save the current plan to history. Called automatically on every change.
  */
 function savePlan() {
   var weekId = getCustomWeekId(new Date());
@@ -364,12 +361,6 @@ function savePlan() {
     }
 
     localStorage.setItem('mealPlannerHistory', JSON.stringify(history));
-    localStorage.removeItem('mealPlannerDraft');
-
-    hasUnsavedChanges = false;
-    updateUnsavedIndicator();
-    renderHistory();
-    showToast('Week saved!');
   } catch (e) {
     showToast('Error saving — storage may be full');
   }
@@ -405,18 +396,10 @@ function migratePlan(plan) {
 
 /**
  * Load the plan on startup.
- * Priority: draft > saved current week > empty plan.
+ * Priority: saved current week > empty plan.
  * Migrates old single-string slot format to arrays.
  */
 function loadOnStartup() {
-  try {
-    var draft = JSON.parse(localStorage.getItem('mealPlannerDraft'));
-    if (draft && Object.keys(draft).length > 0) {
-      hasUnsavedChanges = true;
-      return migratePlan(draft);
-    }
-  } catch (e) { /* ignore */ }
-
   try {
     var data = JSON.parse(localStorage.getItem('mealPlannerCurrent'));
     if (data && data.weekId === getCustomWeekId(new Date())) {
@@ -436,9 +419,7 @@ function copyWeekForward(pastPlan) {
   }
 
   currentPlan = JSON.parse(JSON.stringify(pastPlan));
-  hasUnsavedChanges = true;
-  saveDraft();
-  updateUnsavedIndicator();
+  savePlan();
   renderWeekGrid();
 
   document.getElementById('history-modal-overlay').hidden = true;
@@ -492,7 +473,7 @@ function slugify(text) {
  * Looks up columns by header name so column order doesn't matter.
  */
 function transformSheetData(recipesRows, ingredientsRows) {
-  if (recipesRows.length < 2) return [];
+  if (recipesRows.length < 2) return { meals: [], sheetFavourites: {} };
 
   // Find column indices from the Recipes header row
   var rHeader = recipesRows[0].map(function(h) { return h.trim(); });
@@ -503,7 +484,10 @@ function transformSheetData(recipesRows, ingredientsRows) {
     prepTime: rHeader.indexOf('PrepTime'),
     cookTime: rHeader.indexOf('CookTime'),
     source: rHeader.indexOf('Source'),
-    type: rHeader.indexOf('Type')
+    type: rHeader.indexOf('Type'),
+    favZoe:   rHeader.indexOf('Favourite Zoe'),
+    favDylan: rHeader.indexOf('Favourite Dylan'),
+    favDaddy: rHeader.indexOf('Favourite Daddy')
   };
 
   // Find column indices from the Ingredients header row
@@ -540,8 +524,10 @@ function transformSheetData(recipesRows, ingredientsRows) {
     });
   }
 
-  // Build the meals array from recipe rows
+  // Build the meals array and extract sheet-defined favourites
   var meals = [];
+  var sheetFavourites = { steve: {}, zoe: {}, dylan: {} };
+
   for (var j = 1; j < recipesRows.length; j++) {
     var r = recipesRows[j];
     var id = (rCols.id >= 0 && r[rCols.id]) ? r[rCols.id].trim() : '';
@@ -565,9 +551,14 @@ function transformSheetData(recipesRows, ingredientsRows) {
       type: (rCols.type >= 0 && r[rCols.type]) ? r[rCols.type].trim() : 'tiktok',
       ingredients: ingredientMap[id] || []
     });
+
+    // Extract Y markers from favourite columns
+    if (rCols.favZoe   >= 0 && r[rCols.favZoe]   && r[rCols.favZoe].trim().toUpperCase()   === 'Y') sheetFavourites.zoe[id]   = true;
+    if (rCols.favDylan >= 0 && r[rCols.favDylan] && r[rCols.favDylan].trim().toUpperCase() === 'Y') sheetFavourites.dylan[id] = true;
+    if (rCols.favDaddy >= 0 && r[rCols.favDaddy] && r[rCols.favDaddy].trim().toUpperCase() === 'Y') sheetFavourites.steve[id] = true;
   }
 
-  return meals;
+  return { meals: meals, sheetFavourites: sheetFavourites };
 }
 
 /**
@@ -580,7 +571,7 @@ function getCachedMeals() {
     if (cached && cached.timestamp && cached.meals) {
       var age = Date.now() - cached.timestamp;
       if (age < SHEETS_CACHE_TTL) {
-        return cached.meals;
+        return { meals: cached.meals, sheetFavourites: cached.sheetFavourites || {} };
       }
     }
   } catch (e) { /* ignore */ }
@@ -588,13 +579,14 @@ function getCachedMeals() {
 }
 
 /**
- * Save meals to the localStorage cache with a timestamp.
+ * Save meals and sheet favourites to the localStorage cache with a timestamp.
  */
-function setCachedMeals(meals) {
+function setCachedMeals(meals, sheetFavourites) {
   try {
     localStorage.setItem('mealPlannerRecipeCache', JSON.stringify({
       timestamp: Date.now(),
-      meals: meals
+      meals: meals,
+      sheetFavourites: sheetFavourites || {}
     }));
   } catch (e) { /* fail silently */ }
 }
@@ -615,41 +607,112 @@ function clearMealsCache() {
 function loadMeals(callback) {
   // If Google Sheets is not configured, use defaults immediately
   if (!SPREADSHEET_ID || !SHEETS_API_KEY) {
-    callback(DEFAULT_MEALS);
+    callback(DEFAULT_MEALS, {});
     return;
   }
 
   // Check cache first
   var cached = getCachedMeals();
-  if (cached && cached.length > 0) {
-    callback(cached);
+  if (cached && cached.meals.length > 0) {
+    callback(cached.meals, cached.sheetFavourites);
     return;
   }
 
-  // Fetch both sheets in parallel
-  var recipesPromise = fetchSheetData('Recipes', 'A:F');
+  // Fetch both sheets in parallel — extend Recipes range to J to include favourite columns
+  var recipesPromise = fetchSheetData('Recipes', 'A:J');
   var ingredientsPromise = fetchSheetData('Ingredients', 'A:D');
 
   Promise.all([recipesPromise, ingredientsPromise])
     .then(function(results) {
-      var meals = transformSheetData(results[0], results[1]);
+      var result = transformSheetData(results[0], results[1]);
 
-      if (meals.length === 0) {
+      if (result.meals.length === 0) {
         showToast('No recipes found in Google Sheet — using defaults');
-        callback(DEFAULT_MEALS);
+        callback(DEFAULT_MEALS, {});
         return;
       }
 
-      // Cache the transformed data
-      setCachedMeals(meals);
-      showToast('Loaded ' + meals.length + ' recipes from Google Sheets');
-      callback(meals);
+      setCachedMeals(result.meals, result.sheetFavourites);
+      showToast('Loaded ' + result.meals.length + ' recipes from Google Sheets');
+      callback(result.meals, result.sheetFavourites);
     })
     .catch(function(error) {
       console.error('Failed to load from Google Sheets:', error);
       showToast('Could not load recipes from Google Sheets — using defaults');
-      callback(DEFAULT_MEALS);
+      callback(DEFAULT_MEALS, {});
     });
+}
+
+
+// ── SECTION 4C: Favourites ──────────────────────
+
+/**
+ * Load user's favourite overrides from localStorage.
+ * Structure: { steve: { mealId: true|false }, zoe: {...}, dylan: {...} }
+ * true = explicitly starred, false = explicitly unstarred, missing = use sheet default.
+ */
+function loadFavourites() {
+  try {
+    var saved = JSON.parse(localStorage.getItem('mealPlannerFavourites2'));
+    if (saved && typeof saved === 'object') return saved;
+  } catch (e) { /* ignore */ }
+  return {};
+}
+
+/**
+ * Write the current favourites object to localStorage.
+ */
+function saveFavourites() {
+  try {
+    localStorage.setItem('mealPlannerFavourites2', JSON.stringify(favourites));
+  } catch (e) { /* fail silently */ }
+}
+
+/**
+ * Merge sheet-defined favourites (Y in H/I/J) into the active favourites.
+ * localStorage overrides take precedence — only fills in meals not yet explicitly set.
+ */
+function mergeSheetFavourites(sheetFavs) {
+  PEOPLE.forEach(function(person) {
+    var personSheetFavs = sheetFavs[person] || {};
+    if (!favourites[person]) favourites[person] = {};
+    Object.keys(personSheetFavs).forEach(function(mealId) {
+      if (!(mealId in favourites[person])) {
+        favourites[person][mealId] = true;
+      }
+    });
+  });
+  saveFavourites();
+}
+
+/**
+ * Return all favourited meal IDs for a person (where favourite === true).
+ * Filters out IDs not in the current MEALS array.
+ */
+function getFavourites(person) {
+  var personFavs = favourites[person] || {};
+  return Object.keys(personFavs).filter(function(id) {
+    return personFavs[id] === true && findMeal(id) !== undefined;
+  });
+}
+
+/**
+ * Toggle a meal's favourite status for the current user.
+ * Saves to localStorage and re-renders the meal list.
+ */
+function toggleFavourite(person, mealId) {
+  if (!person) return;
+  if (!favourites[person]) favourites[person] = {};
+  var newValue = !(favourites[person][mealId] === true);
+  favourites[person][mealId] = newValue;
+  saveFavourites();
+  renderMealList();
+  // Write back to Google Sheet in the background
+  fetch(API_BASE + '/favourite', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ recipe_id: mealId, person: person, actor: currentUser, value: newValue })
+  }).catch(function() { /* silent — localStorage already updated */ });
 }
 
 
@@ -772,56 +835,154 @@ function copyShoppingListToClipboard() {
 }
 
 
+// ── SECTION 5B: Person Selector ────────────────
+
+/**
+ * Show the person selector modal.
+ */
+function showPersonSelector() {
+  document.getElementById('person-selector-overlay').hidden = false;
+}
+
+/**
+ * Set the current user, persist to localStorage, and re-render.
+ */
+function setCurrentUser(person) {
+  currentUser = person;
+  mealFilter = '';
+  document.getElementById('meal-search').value = '';
+  try { localStorage.setItem('mealPlannerCurrentUser', person); } catch (e) {}
+  document.getElementById('person-selector-overlay').hidden = true;
+  renderViewingAs();
+  renderMealList();
+}
+
+/**
+ * Render the "Viewing as: Daddy · Switch" indicator in the sidebar.
+ */
+function renderViewingAs() {
+  var el = document.getElementById('viewing-as');
+  if (!el) return;
+  if (!currentUser) {
+    el.innerHTML = '';
+    return;
+  }
+  el.innerHTML = 'Viewing as: <strong>' + PEOPLE_LABELS[currentUser] + '</strong> \u00b7 ' +
+    '<button class="switch-user-btn" id="switch-user-btn">Switch</button>';
+  document.getElementById('switch-user-btn').addEventListener('click', showPersonSelector);
+}
+
+
 // ── SECTION 6: Rendering ──────────────────────
 
 /**
- * Render the sidebar meal list with draggable cards.
- * Each card has an optional info button to view recipe details.
+ * Append a single draggable meal card to a container element.
+ */
+function appendMealCard(container, meal) {
+  var card = document.createElement('div');
+  card.className = meal.type === 'request' ? 'meal-card meal-card--request' : 'meal-card';
+  card.draggable = true;
+
+  var nameSpan = document.createElement('span');
+  nameSpan.className = 'meal-card-name';
+  nameSpan.textContent = meal.name;
+  card.appendChild(nameSpan);
+
+  // Star toggle — only shown when a user is selected
+  if (currentUser) {
+    var isFav = favourites[currentUser] && favourites[currentUser][meal.id] === true;
+    var starBtn = document.createElement('button');
+    starBtn.className = 'meal-card-star' + (isFav ? ' meal-card-star--active' : '');
+    starBtn.textContent = '\u2605'; // ★
+    starBtn.title = isFav ? 'Remove from favourites' : 'Add to favourites';
+    (function(mealId) {
+      starBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        toggleFavourite(currentUser, mealId);
+      });
+    })(meal.id);
+    card.appendChild(starBtn);
+  }
+
+  if (meal.instructions || meal.prepTime || meal.cookTime || meal.source) {
+    var infoBtn = document.createElement('button');
+    infoBtn.className = 'meal-card-info';
+    infoBtn.textContent = 'i';
+    infoBtn.title = 'View recipe';
+    infoBtn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      showRecipeModal(meal.id);
+    });
+    card.appendChild(infoBtn);
+  }
+
+  card.addEventListener('dragstart', function(e) {
+    e.dataTransfer.setData('text/plain', meal.id);
+    e.dataTransfer.effectAllowed = 'copy';
+    card.classList.add('dragging');
+  });
+
+  card.addEventListener('dragend', function() {
+    card.classList.remove('dragging');
+    var highlights = document.querySelectorAll('.drag-over');
+    for (var i = 0; i < highlights.length; i++) {
+      highlights[i].classList.remove('drag-over');
+    }
+  });
+
+  container.appendChild(card);
+}
+
+/**
+ * Render the sidebar meal list.
+ * If a user is selected: Favourites section (top 10) then All Meals.
+ * Otherwise: flat list (no section headers).
  */
 function renderMealList() {
   var container = document.getElementById('meal-list');
   container.innerHTML = '';
 
+  var filter = mealFilter.toLowerCase().trim();
+  var favIds = currentUser ? getFavourites(currentUser) : [];
+  var favSet = {};
+  favIds.forEach(function(id) { favSet[id] = true; });
+
+  // Pinned favourites section — never filtered, always visible at top
+  if (favIds.length > 0) {
+    var favSection = document.createElement('div');
+    favSection.className = 'meal-list-favourites';
+
+    var favHeader = document.createElement('div');
+    favHeader.className = 'meal-section-header';
+    favHeader.textContent = 'Favourites';
+    favSection.appendChild(favHeader);
+
+    favIds.forEach(function(id) {
+      var meal = findMeal(id);
+      if (meal) appendMealCard(favSection, meal);
+    });
+
+    container.appendChild(favSection);
+  }
+
+  // Scrollable All Meals section — filtered by search
+  var allSection = document.createElement('div');
+  allSection.className = 'meal-list-all';
+
+  if (currentUser) {
+    var allHeader = document.createElement('div');
+    allHeader.className = 'meal-section-header';
+    allHeader.textContent = 'All Meals';
+    allSection.appendChild(allHeader);
+  }
+
   MEALS.forEach(function(meal) {
-    var card = document.createElement('div');
-    card.className = meal.type === 'request' ? 'meal-card meal-card--request' : 'meal-card';
-    card.draggable = true;
-
-    // Meal name text
-    var nameSpan = document.createElement('span');
-    nameSpan.className = 'meal-card-name';
-    nameSpan.textContent = meal.name;
-    card.appendChild(nameSpan);
-
-    // Info button — shown if the meal has any detail (instructions, timing, or source)
-    if (meal.instructions || meal.prepTime || meal.cookTime || meal.source) {
-      var infoBtn = document.createElement('button');
-      infoBtn.className = 'meal-card-info';
-      infoBtn.textContent = 'i';
-      infoBtn.title = 'View recipe';
-      infoBtn.addEventListener('click', function(e) {
-        e.stopPropagation(); // don't interfere with drag
-        showRecipeModal(meal.id);
-      });
-      card.appendChild(infoBtn);
-    }
-
-    card.addEventListener('dragstart', function(e) {
-      e.dataTransfer.setData('text/plain', meal.id);
-      e.dataTransfer.effectAllowed = 'copy';
-      card.classList.add('dragging');
-    });
-
-    card.addEventListener('dragend', function() {
-      card.classList.remove('dragging');
-      var highlights = document.querySelectorAll('.drag-over');
-      for (var i = 0; i < highlights.length; i++) {
-        highlights[i].classList.remove('drag-over');
-      }
-    });
-
-    container.appendChild(card);
+    if (favSet[meal.id]) return; // already shown in favourites
+    if (filter && meal.name.toLowerCase().indexOf(filter) === -1) return;
+    appendMealCard(allSection, meal);
   });
+
+  container.appendChild(allSection);
 }
 
 /**
@@ -890,24 +1051,6 @@ function showRecipeModal(mealId) {
   document.getElementById('recipe-modal-overlay').hidden = false;
 }
 
-/**
- * Update the recipe source indicator in the sidebar.
- * Shows whether recipes come from Google Sheets or hardcoded defaults.
- */
-function updateRecipeSource() {
-  var el = document.getElementById('recipe-source');
-  if (!el) return;
-
-  if (SPREADSHEET_ID && SHEETS_API_KEY) {
-    el.textContent = 'From Google Sheets';
-    el.className = 'recipe-source recipe-source-sheets';
-    document.getElementById('refresh-recipes-btn').hidden = false;
-  } else {
-    el.textContent = 'Using default recipes';
-    el.className = 'recipe-source recipe-source-default';
-    document.getElementById('refresh-recipes-btn').hidden = true;
-  }
-}
 
 /**
  * Render the full week grid — all 7 days stacked vertically.
@@ -994,42 +1137,53 @@ function renderAssignedMeal(cell, key, mealId) {
   tag.className = 'assigned-meal';
   tag.textContent = meal.name;
 
-  var hint = document.createElement('span');
-  hint.className = 'remove-hint';
-  hint.textContent = ' ✕';
-  tag.appendChild(hint);
+  if (canEditSlot(key)) {
+    var hint = document.createElement('span');
+    hint.className = 'remove-hint';
+    hint.textContent = ' ✕';
+    tag.appendChild(hint);
 
-  tag.addEventListener('click', function() {
-    removeMeal(key, mealId);
-  });
+    tag.addEventListener('click', function() {
+      removeMeal(key, mealId);
+    });
+  }
 
   cell.appendChild(tag);
 }
 
 /**
- * Render the history list in the sidebar.
+ * Populate and toggle the week dropdown in the header.
+ * Shows the current week + past weeks from history.
  */
-function renderHistory() {
-  var container = document.getElementById('history-list');
+function renderWeekDropdown() {
+  var menu = document.getElementById('week-dropdown-menu');
+  menu.innerHTML = '';
+
+  var currentItem = document.createElement('div');
+  currentItem.className = 'week-dropdown-item week-dropdown-current';
+  currentItem.textContent = getWeekLabel(new Date());
+  menu.appendChild(currentItem);
+
   var history = loadHistory();
-
-  if (history.length === 0) {
-    container.innerHTML = '<div class="history-empty">No saved weeks yet</div>';
-    return;
-  }
-
-  container.innerHTML = '';
-  history.forEach(function(entry) {
-    var item = document.createElement('div');
-    item.className = 'history-item';
-    item.textContent = entry.weekLabel;
-
-    item.addEventListener('click', function() {
-      showHistoryModal(entry);
+  if (history.length > 0) {
+    var divider = document.createElement('div');
+    divider.className = 'week-dropdown-divider';
+    menu.appendChild(divider);
+    history.forEach(function(entry) {
+      var item = document.createElement('div');
+      item.className = 'week-dropdown-item';
+      item.textContent = entry.weekLabel;
+      item.addEventListener('click', function() {
+        closeWeekDropdown();
+        showHistoryModal(entry);
+      });
+      menu.appendChild(item);
     });
+  }
+}
 
-    container.appendChild(item);
-  });
+function closeWeekDropdown() {
+  document.getElementById('week-dropdown-menu').hidden = true;
 }
 
 /**
@@ -1096,13 +1250,6 @@ function showHistoryModal(entry) {
 }
 
 /**
- * Update the "unsaved changes" indicator in the header.
- */
-function updateUnsavedIndicator() {
-  document.getElementById('unsaved-indicator').hidden = !hasUnsavedChanges;
-}
-
-/**
  * Update the week label in the header.
  */
 function updateWeekLabel() {
@@ -1113,10 +1260,21 @@ function updateWeekLabel() {
 // ── SECTION 7: Drag and Drop ──────────────────
 
 /**
+ * Returns true if the current user is allowed to modify the given slot.
+ * Daddy (steve) can edit any slot; Zoe and Dylan can only edit their own.
+ */
+function canEditSlot(key) {
+  if (currentUser === 'steve') return true;
+  var person = key.split('-').pop();
+  return person === currentUser;
+}
+
+/**
  * Set up a grid cell as a drag-and-drop target.
  */
 function setupDropZone(cell, key) {
   cell.addEventListener('dragover', function(e) {
+    if (!canEditSlot(key)) return; // no highlight for locked slots
     e.preventDefault();
     e.dataTransfer.dropEffect = 'copy';
     cell.classList.add('drag-over');
@@ -1131,6 +1289,7 @@ function setupDropZone(cell, key) {
   cell.addEventListener('drop', function(e) {
     e.preventDefault();
     cell.classList.remove('drag-over');
+    if (!canEditSlot(key)) return;
 
     var mealId = e.dataTransfer.getData('text/plain');
     if (mealId && findMeal(mealId)) {
@@ -1150,9 +1309,7 @@ function assignMeal(key, mealId) {
   if (currentPlan[key].indexOf(mealId) === -1) {
     currentPlan[key].push(mealId);
   }
-  hasUnsavedChanges = true;
-  saveDraft();
-  updateUnsavedIndicator();
+  savePlan();
   renderWeekGrid();
 }
 
@@ -1162,9 +1319,7 @@ function assignMeal(key, mealId) {
 function removeMeal(key, mealId) {
   if (!Array.isArray(currentPlan[key])) { currentPlan[key] = []; return; }
   currentPlan[key] = currentPlan[key].filter(function(id) { return id !== mealId; });
-  hasUnsavedChanges = true;
-  saveDraft();
-  updateUnsavedIndicator();
+  savePlan();
   renderWeekGrid();
 }
 
@@ -1184,9 +1339,7 @@ function clearWeek() {
     });
   });
 
-  hasUnsavedChanges = true;
-  saveDraft();
-  updateUnsavedIndicator();
+  savePlan();
   renderWeekGrid();
   showToast('Week cleared');
 }
@@ -1205,15 +1358,6 @@ function changeStartDay(newStartDay) {
 
 // ── SECTION 9: Event Listeners ────────────────
 
-// Save Week button
-document.getElementById('save-btn').addEventListener('click', savePlan);
-
-// Generate Shopping List button
-document.getElementById('shopping-list-btn').addEventListener('click', function() {
-  renderShoppingListModal();
-  document.getElementById('shopping-modal-overlay').hidden = false;
-});
-
 // Close shopping list modal
 document.getElementById('shopping-modal-close').addEventListener('click', function() {
   document.getElementById('shopping-modal-overlay').hidden = true;
@@ -1222,10 +1366,24 @@ document.getElementById('shopping-modal-close').addEventListener('click', functi
 // Copy shopping list to clipboard
 document.getElementById('copy-list-btn').addEventListener('click', copyShoppingListToClipboard);
 
-// Clear All button
-document.getElementById('clear-week-btn').addEventListener('click', clearWeek);
+// Week dropdown — toggle on button click, close on outside click
+document.getElementById('week-dropdown-btn').addEventListener('click', function(e) {
+  e.stopPropagation();
+  var menu = document.getElementById('week-dropdown-menu');
+  if (menu.hidden) {
+    renderWeekDropdown();
+    menu.hidden = false;
+  } else {
+    menu.hidden = true;
+  }
+});
+document.addEventListener('click', function(e) {
+  if (!document.getElementById('week-dropdown').contains(e.target)) {
+    closeWeekDropdown();
+  }
+});
 
-// Close history modal
+// Close history detail modal
 document.getElementById('history-modal-close').addEventListener('click', function() {
   document.getElementById('history-modal-overlay').hidden = true;
 });
@@ -1251,18 +1409,29 @@ document.getElementById('recipe-modal-overlay').addEventListener('click', functi
   if (e.target === this) this.hidden = true;
 });
 
-// Refresh Recipes button — clears cache and re-fetches from Google Sheets
-document.getElementById('refresh-recipes-btn').addEventListener('click', function() {
-  clearMealsCache();
-  var mealListEl = document.getElementById('meal-list');
-  mealListEl.innerHTML = '<div class="meals-loading">Refreshing recipes...</div>';
 
-  loadMeals(function(meals) {
-    MEALS = meals;
-    renderMealList();
-    renderWeekGrid();
-    updateRecipeSource();
+// Meal search/filter
+document.getElementById('meal-search').addEventListener('input', function() {
+  mealFilter = this.value;
+  renderMealList();
+});
+
+// Person selector buttons
+document.querySelectorAll('.person-btn').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    setCurrentUser(this.getAttribute('data-person'));
   });
+});
+
+// Close person selector without selecting (only available if user already set)
+document.getElementById('person-selector-close').addEventListener('click', function() {
+  document.getElementById('person-selector-overlay').hidden = true;
+});
+
+// Overlay click dismisses person selector only if a user is already selected
+// (prevents accidental first-visit dismissal without choosing)
+document.getElementById('person-selector-overlay').addEventListener('click', function(e) {
+  if (e.target === this && currentUser) this.hidden = true;
 });
 
 // Close modals on Escape key
@@ -1273,6 +1442,9 @@ document.addEventListener('keydown', function(e) {
     document.getElementById('recipe-modal-overlay').hidden = true;
     document.getElementById('pending-modal-overlay').hidden = true;
     document.getElementById('request-modal-overlay').hidden = true;
+    if (currentUser) {
+      document.getElementById('person-selector-overlay').hidden = true;
+    }
   }
 });
 
@@ -1485,9 +1657,9 @@ function initApp() {
   startDay = loadStartDay();
   document.getElementById('start-day-select').value = startDay;
   currentPlan = loadOnStartup();
+  favourites = loadFavourites();
+  try { currentUser = localStorage.getItem('mealPlannerCurrentUser') || null; } catch (e) {}
   updateWeekLabel();
-  updateUnsavedIndicator();
-  renderHistory();
 
   // Show loading state in the sidebar meal list (only if Sheets is configured)
   if (SPREADSHEET_ID && SHEETS_API_KEY) {
@@ -1496,11 +1668,13 @@ function initApp() {
   }
 
   // Load meals (async if Google Sheets configured, sync otherwise)
-  loadMeals(function(meals) {
+  loadMeals(function(meals, sheetFavourites) {
     MEALS = meals;
+    mergeSheetFavourites(sheetFavourites);
     renderMealList();
     renderWeekGrid();
-    updateRecipeSource();
+    renderViewingAs();
+    if (!currentUser) showPersonSelector();
     console.log('Meal Planner loaded (' + MEALS.length + ' recipes)');
   });
 

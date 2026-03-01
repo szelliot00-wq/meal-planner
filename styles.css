@@ -22,7 +22,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.75rem 1.5rem;
+  padding: 0.4rem 1.25rem;
   background: #fff;
   border-bottom: 1px solid #e0e0e0;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
@@ -159,6 +159,10 @@ body {
   align-self: start;
   position: sticky;
   top: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 1.5rem);
+  overflow: hidden;
 }
 
 .sidebar-title {
@@ -195,6 +199,49 @@ body {
   color: #64748b;
 }
 
+/* ── Meal list: flex column so favourites pin and All Meals scrolls ── */
+.meal-list {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0; /* essential: allows flex child to shrink below content size */
+  overflow: hidden;
+}
+
+.meal-list-favourites {
+  flex-shrink: 0;
+  max-height: 14rem; /* ~5 cards, then scroll */
+  overflow-y: auto;
+}
+
+.meal-list-all {
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+/* ── Meal search/filter input ── */
+.meal-search {
+  width: 100%;
+  padding: 0.35rem 0.6rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  color: #334155;
+  background: #f8fafc;
+  outline: none;
+  box-sizing: border-box;
+  margin-bottom: 0.4rem;
+  flex-shrink: 0;
+}
+.meal-search:focus {
+  border-color: #6366f1;
+  background: #fff;
+}
+.meal-search::placeholder {
+  color: #94a3b8;
+}
+
 /* ── Loading state for meal list ── */
 .meals-loading {
   font-size: 0.75rem;
@@ -204,10 +251,91 @@ body {
   padding: 1rem 0;
 }
 
-/* ── Refresh Recipes button ── */
-.refresh-recipes-btn {
-  margin-top: 0.4rem;
+/* ── Compact buttons in header ── */
+.header-btn {
+  padding: 0.3rem 0.65rem;
+  font-size: 0.72rem;
+  white-space: nowrap;
+  width: auto;
+  margin-bottom: 0;
+}
+
+/* ── Week dropdown ── */
+.week-dropdown { position: relative; }
+
+.week-dropdown-btn {
+  background: none;
+  border: none;
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: #64748b;
+  cursor: pointer;
+  padding: 0.25rem 0.4rem;
+  border-radius: 5px;
+  display: flex;
+  align-items: center;
+  transition: background 0.15s, color 0.15s;
+}
+.week-dropdown-btn:hover { background: #f1f5f9; color: #334155; }
+
+.week-caret { font-size: 0.6rem; color: #94a3b8; }
+
+.week-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+  z-index: 200;
+  min-width: 180px;
+  overflow: hidden;
+}
+.week-dropdown-item {
+  padding: 0.5rem 1rem;
+  font-size: 0.78rem;
+  color: #475569;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+.week-dropdown-item:hover { background: #f1f5f9; }
+.week-dropdown-current {
+  font-weight: 700;
+  color: #1e293b;
+  cursor: default;
+  background: #f8fafc;
+}
+.week-dropdown-current:hover { background: #f8fafc; }
+.week-dropdown-divider { height: 1px; background: #e2e8f0; }
+
+/* ── Week start-day fab — fixed bottom right, discreet ── */
+.start-day-fab {
+  position: fixed;
+  bottom: 0;
+  right: 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: rgba(30, 41, 59, 0.55);
+  color: #fff;
+  border-radius: 6px 6px 0 0;
+  padding: 0.3rem 0.75rem;
   font-size: 0.7rem;
+  z-index: 100;
+  opacity: 0.5;
+  transition: opacity 0.2s;
+}
+.start-day-fab:hover { opacity: 1; }
+.start-day-fab-label { font-size: 0.7rem; color: rgba(255,255,255,0.8); white-space: nowrap; }
+.start-day-fab .start-day-select {
+  background: transparent;
+  border: none;
+  color: #fff;
+  font-size: 0.7rem;
+  cursor: pointer;
+  padding: 0;
+  outline: none;
 }
 
 /* ── Draggable meal cards in sidebar ── */
@@ -745,4 +873,65 @@ body {
 .request-food-input:focus {
   border-color: #2563eb;
   box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+}
+
+/* ── Favourite star button on meal cards ── */
+.meal-card-star {
+  background: none;
+  border: none;
+  font-size: 0.95rem;
+  cursor: pointer;
+  color: #d1d5db;
+  flex-shrink: 0;
+  padding: 0 2px;
+  line-height: 1;
+  transition: color 0.15s;
+}
+.meal-card-star:hover,
+.meal-card-star--active {
+  color: #f59e0b;
+}
+
+/* ── Person selector modal ── */
+.person-selector-modal { max-width: 380px; }
+.person-selector-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1.5rem;
+}
+.person-btn {
+  padding: 1rem;
+  font-size: 1.2rem;
+  font-weight: 700;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  background: #6366f1;
+  color: #fff;
+  transition: background 0.15s, transform 0.1s;
+}
+.person-btn:hover { background: #4f46e5; transform: translateY(-2px); }
+
+/* ── Sidebar meal section headers (Favourites / All Meals) ── */
+.meal-section-header {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #94a3b8;
+  margin: 0.6rem 0 0.3rem;
+}
+.meal-section-header:first-child { margin-top: 0; }
+
+/* ── Viewing-as indicator in header ── */
+.viewing-as { font-size: 0.72rem; color: #64748b; }
+.switch-user-btn {
+  background: none;
+  border: none;
+  color: #6366f1;
+  font-size: 0.72rem;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
 }
