@@ -88,12 +88,15 @@ Kids tap **"+ Request"** in the header:
 - `POST /plan` — save shared plan to server (body: `{ current, history }`)
 
 ## Cross-device sync
-The current week plan and history are stored in `plan.json` on the server (written by the pipeline server).
+The current week plan, history, and recipe version are stored in `plan.json` on the server.
 
 - On every save, `savePlan()` POSTs to `/plan` in the background
 - On load (after meals ready), `syncFromServer()` fetches `/plan` and re-renders if the plan differs
 - Also syncs on tab focus (`visibilitychange`) and every 30 seconds
 - localStorage stays as the offline/fallback cache
+
+### Recipe cache invalidation
+When a recipe is approved on the server, `recipes_version` in `plan.json` is incremented. On the next sync, other devices compare this to their locally stored `mealPlannerRecipesVersion`. If the server version is higher, they clear the recipe cache and re-fetch from Google Sheets — new recipes appear within 30 seconds on all devices.
 
 ## localStorage keys
 | Key | Contents |
@@ -103,6 +106,7 @@ The current week plan and history are stored in `plan.json` on the server (writt
 | `mealPlannerCurrent` | Current week plan |
 | `mealPlannerHistory` | Array of past week entries (max 12) |
 | `mealPlannerRecipeCache` | Cached sheet data + timestamp |
+| `mealPlannerRecipesVersion` | Last known `recipes_version` from server (for cache invalidation) |
 | `mealPlannerStartDay` | `'mon'`…`'sun'` |
 
 ## Rules
