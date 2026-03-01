@@ -1709,6 +1709,9 @@ document.getElementById('request-food-input').addEventListener('keydown', functi
  * then renders everything once data is ready.
  */
 function initApp() {
+  // Always fetch fresh recipes from Sheets on load — no stale cache
+  clearMealsCache();
+
   // Load synchronous settings first
   startDay = loadStartDay();
   document.getElementById('start-day-select').value = startDay;
