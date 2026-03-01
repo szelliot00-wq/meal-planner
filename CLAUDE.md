@@ -84,6 +84,16 @@ Kids tap **"+ Request"** in the header:
 - `DELETE /pending/{id}` — reject a recipe
 - `POST /request` — submit a food request (body: `{"name": "Dylan: Pizza"}`)
 - `POST /favourite` — toggle a favourite (body: `{ recipe_id, person, actor, value }`)
+- `GET /plan` — fetch shared plan `{ current, history }` from server
+- `POST /plan` — save shared plan to server (body: `{ current, history }`)
+
+## Cross-device sync
+The current week plan and history are stored in `plan.json` on the server (written by the pipeline server).
+
+- On every save, `savePlan()` POSTs to `/plan` in the background
+- On load (after meals ready), `syncFromServer()` fetches `/plan` and re-renders if the plan differs
+- Also syncs on tab focus (`visibilitychange`) and every 30 seconds
+- localStorage stays as the offline/fallback cache
 
 ## localStorage keys
 | Key | Contents |
