@@ -361,6 +361,14 @@ function savePlan() {
     }
 
     localStorage.setItem('mealPlannerHistory', JSON.stringify(history));
+
+    // Sync to server in the background so other devices see the change
+    fetch(API_BASE + '/plan', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ current: entry, history: history })
+    }).catch(function() {}); // silently ignore if offline
+
   } catch (e) {
     showToast('Error saving — storage may be full');
   }
@@ -408,6 +416,36 @@ function loadOnStartup() {
   } catch (e) { /* ignore */ }
 
   return createEmptyPlan();
+}
+
+/**
+ * Fetch the shared plan from the server and update if newer.
+ * Falls back silently if offline. Re-renders the grid if the plan changed.
+ */
+function syncFromServer() {
+  if (!MEALS || MEALS.length === 0) return; // not ready yet
+  fetch(API_BASE + '/plan')
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (!data || !data.current) return;
+
+      // Update shared history in localStorage so the week dropdown shows it
+      if (data.history && data.history.length > 0) {
+        try { localStorage.setItem('mealPlannerHistory', JSON.stringify(data.history)); } catch (e) {}
+      }
+
+      // Only apply the plan if it's for the current week
+      if (data.current.weekId !== getCustomWeekId(new Date())) return;
+
+      var incoming = JSON.stringify(data.current.plan);
+      var current  = JSON.stringify(currentPlan);
+      if (incoming === current) return; // nothing changed
+
+      currentPlan = migratePlan(data.current.plan);
+      try { localStorage.setItem('mealPlannerCurrent', JSON.stringify(data.current)); } catch (e) {}
+      renderWeekGrid();
+    })
+    .catch(function() {}); // silently ignore if offline
 }
 
 /**
@@ -1676,11 +1714,20 @@ function initApp() {
     renderViewingAs();
     if (!currentUser) showPersonSelector();
     console.log('Meal Planner loaded (' + MEALS.length + ' recipes)');
+
+    // Initial sync from server — overrides localStorage if server has newer data
+    syncFromServer();
   });
 
   // Check for pending recipes to review (badge in header)
   checkPendingCount();
 }
+
+// Poll for plan changes from other devices: on tab focus and every 30s
+document.addEventListener('visibilitychange', function() {
+  if (!document.hidden) syncFromServer();
+});
+setInterval(syncFromServer, 30000);
 
 // Start the app
 initApp();
