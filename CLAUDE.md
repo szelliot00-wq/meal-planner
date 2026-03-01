@@ -76,7 +76,7 @@ Kids tap **"+ Request"** in the header:
 - Select Dyl-Boi or Zbutt
 - Type what they want
 - Tap Send → goes to Pending tab with `type=request`
-- Approved requests appear in the meal sidebar with a red left border
+- Approved requests appear in the meal sidebar styled identically to regular meal cards
 
 ## Pipeline API (same server, port 8090)
 `API_BASE` in `app.js` is `''` (same origin):
