@@ -109,13 +109,24 @@ body {
   background: #cbd5e1;
 }
 
-/* Pending review badge in the header */
-.btn-warning {
-  background: #d97706;
+/* Pending review button — fixed at bottom of screen, discreet */
+.pending-fab {
+  position: fixed;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #92400e;
   color: #fff;
+  border: none;
+  padding: 0.3rem 1rem;
+  font-size: 0.7rem;
+  cursor: pointer;
+  border-radius: 6px 6px 0 0;
+  opacity: 0.5;
+  z-index: 100;
 }
-.btn-warning:hover {
-  background: #b45309;
+.pending-fab:hover {
+  opacity: 1;
 }
 
 /* New Food Request button in the sidebar */

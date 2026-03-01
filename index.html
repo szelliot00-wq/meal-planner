@@ -24,9 +24,6 @@
           <option value="sun">Sunday</option>
         </select>
         <span class="week-label" id="week-label"></span>
-        <button class="btn btn-warning" id="pending-btn" hidden>
-          <span id="pending-count">0</span> to review
-        </button>
         <span class="unsaved-indicator" id="unsaved-indicator" hidden>Unsaved changes</span>
         <button class="btn btn-primary" id="save-btn">Save Week</button>
       </div>
@@ -152,6 +149,11 @@
         </div>
       </div>
     </div>
+
+  <!-- Pending review button — fixed at bottom, discreet -->
+  <button class="pending-fab" id="pending-btn" hidden>
+    <span id="pending-count">0</span> to review
+  </button>
 
   </div>
   <script src="config.js"></script>
