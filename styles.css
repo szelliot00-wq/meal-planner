@@ -404,13 +404,14 @@ body {
 
 .assigned-meal .remove-hint {
   display: none;
-  font-size: 0.6rem;
+  font-size: 0.65rem;
   font-weight: 400;
-  opacity: 0.8;
+  opacity: 0.75;
+  margin-left: 2px;
 }
 
 .assigned-meal:hover .remove-hint {
-  display: block;
+  display: inline;
 }
 
 /* ── Modal overlay + panel ── */

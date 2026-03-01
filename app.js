@@ -249,23 +249,21 @@ function formatQuantity(quantity, unit) {
 }
 
 /**
- * Count how many meals are assigned for a given day.
- * Max is 6 (2 meals x 3 people).
+ * Count how many meals are assigned for a given day (total across all slots).
  */
 function countMealsForDay(day) {
   var count = 0;
   MEALS_OF_DAY.forEach(function(meal) {
     PEOPLE.forEach(function(person) {
-      if (currentPlan[slotKey(day, meal, person)]) {
-        count++;
-      }
+      var meals = currentPlan[slotKey(day, meal, person)];
+      if (meals && meals.length) count += meals.length;
     });
   });
   return count;
 }
 
 /**
- * Create an empty plan with all 42 slots set to null.
+ * Create an empty plan with all slots set to empty arrays.
  * (7 days x 2 meals x 3 people)
  */
 function createEmptyPlan() {
@@ -273,7 +271,7 @@ function createEmptyPlan() {
   ALL_DAYS.forEach(function(day) {
     MEALS_OF_DAY.forEach(function(meal) {
       PEOPLE.forEach(function(person) {
-        plan[slotKey(day, meal, person)] = null;
+        plan[slotKey(day, meal, person)] = [];
       });
     });
   });
@@ -389,22 +387,40 @@ function loadHistory() {
 }
 
 /**
+ * Migrate an old-format plan (slot values were null or a single string)
+ * to the new format where every slot is an array of meal IDs.
+ */
+function migratePlan(plan) {
+  Object.keys(plan).forEach(function(key) {
+    var val = plan[key];
+    if (val === null || val === undefined) {
+      plan[key] = [];
+    } else if (typeof val === 'string') {
+      plan[key] = val ? [val] : [];
+    }
+    // already an array — leave as-is
+  });
+  return plan;
+}
+
+/**
  * Load the plan on startup.
  * Priority: draft > saved current week > empty plan.
+ * Migrates old single-string slot format to arrays.
  */
 function loadOnStartup() {
   try {
     var draft = JSON.parse(localStorage.getItem('mealPlannerDraft'));
     if (draft && Object.keys(draft).length > 0) {
       hasUnsavedChanges = true;
-      return draft;
+      return migratePlan(draft);
     }
   } catch (e) { /* ignore */ }
 
   try {
     var data = JSON.parse(localStorage.getItem('mealPlannerCurrent'));
     if (data && data.weekId === getCustomWeekId(new Date())) {
-      return data.plan;
+      return migratePlan(data.plan);
     }
   } catch (e) { /* ignore */ }
 
@@ -651,25 +667,29 @@ function generateShoppingList(plan) {
     MEALS_OF_DAY.forEach(function(mealTime) {
       PEOPLE.forEach(function(person) {
         var key = slotKey(day, mealTime, person);
-        var mealId = plan[key];
-        if (!mealId) return;
+        // Support both old (string/null) and new (array) formats
+        var mealIds = plan[key];
+        if (!mealIds) return;
+        if (typeof mealIds === 'string') mealIds = [mealIds];
 
-        var meal = findMeal(mealId);
-        if (!meal) return;
+        mealIds.forEach(function(mealId) {
+          var meal = findMeal(mealId);
+          if (!meal) return;
 
-        meal.ingredients.forEach(function(ing) {
-          // Unified format: { name, quantity (number), unit (string) }
-          // Merge by name+unit, sum quantities
-          var mapKey = ing.name.toLowerCase() + '|' + (ing.unit || '');
-          if (consolidated[mapKey]) {
-            consolidated[mapKey].quantity += ing.quantity;
-          } else {
-            consolidated[mapKey] = {
-              name: ing.name,
-              quantity: ing.quantity,
-              unit: ing.unit || ''
-            };
-          }
+          meal.ingredients.forEach(function(ing) {
+            // Unified format: { name, quantity (number), unit (string) }
+            // Merge by name+unit, sum quantities
+            var mapKey = ing.name.toLowerCase() + '|' + (ing.unit || '');
+            if (consolidated[mapKey]) {
+              consolidated[mapKey].quantity += ing.quantity;
+            } else {
+              consolidated[mapKey] = {
+                name: ing.name,
+                quantity: ing.quantity,
+                unit: ing.unit || ''
+              };
+            }
+          });
         });
       });
     });
@@ -909,7 +929,7 @@ function renderWeekGrid() {
     var header = document.createElement('div');
     header.className = 'day-header';
     var count = countMealsForDay(day);
-    header.textContent = DAY_LABELS[day] + ' (' + count + '/6)';
+    header.textContent = count > 0 ? DAY_LABELS[day] + ' (' + count + ')' : DAY_LABELS[day];
     dayBlock.appendChild(header);
 
     // Meal sections: Lunch and Dinner
@@ -939,10 +959,13 @@ function renderWeekGrid() {
         personLabel.textContent = PEOPLE_LABELS[person];
         cell.appendChild(personLabel);
 
-        // If a meal is assigned, show it
-        var assignedMealId = currentPlan[key];
-        if (assignedMealId) {
-          renderAssignedMeal(cell, key, assignedMealId);
+        // Render all assigned meals (multiple allowed)
+        var assignedMeals = currentPlan[key] || [];
+        if (assignedMeals.length > 0) {
+          cell.classList.add('has-meal');
+          assignedMeals.forEach(function(mealId) {
+            renderAssignedMeal(cell, key, mealId);
+          });
         }
 
         // Set up drag-and-drop on this cell
@@ -961,13 +984,11 @@ function renderWeekGrid() {
 
 /**
  * Render an assigned meal tag inside a cell.
- * Clicking it removes the assignment.
+ * Clicking it removes just that meal from the slot.
  */
 function renderAssignedMeal(cell, key, mealId) {
   var meal = findMeal(mealId);
   if (!meal) return;
-
-  cell.classList.add('has-meal');
 
   var tag = document.createElement('div');
   tag.className = 'assigned-meal';
@@ -975,11 +996,11 @@ function renderAssignedMeal(cell, key, mealId) {
 
   var hint = document.createElement('span');
   hint.className = 'remove-hint';
-  hint.textContent = ' (click to remove)';
+  hint.textContent = ' ✕';
   tag.appendChild(hint);
 
   tag.addEventListener('click', function() {
-    removeMeal(key);
+    removeMeal(key, mealId);
   });
 
   cell.appendChild(tag);
@@ -1032,13 +1053,15 @@ function showHistoryModal(entry) {
       var assignments = [];
       PEOPLE.forEach(function(person) {
         var key = slotKey(day, mealTime, person);
-        var mealId = entry.plan[key];
-        if (mealId) {
+        var mealIds = entry.plan[key];
+        if (!mealIds) return;
+        if (typeof mealIds === 'string') mealIds = [mealIds]; // old format
+        mealIds.forEach(function(mealId) {
           var meal = findMeal(mealId);
           var mealName = meal ? meal.name : mealId;
           assignments.push(PEOPLE_LABELS[person] + ': ' + mealName);
           hasAny = true;
-        }
+        });
       });
 
       if (assignments.length > 0) {
@@ -1120,10 +1143,13 @@ function setupDropZone(cell, key) {
 // ── SECTION 8: Actions ────────────────────────
 
 /**
- * Assign a meal to a slot. Updates state, saves draft, re-renders.
+ * Assign a meal to a slot. Adds to the array; ignores duplicates.
  */
 function assignMeal(key, mealId) {
-  currentPlan[key] = mealId;
+  if (!Array.isArray(currentPlan[key])) currentPlan[key] = [];
+  if (currentPlan[key].indexOf(mealId) === -1) {
+    currentPlan[key].push(mealId);
+  }
   hasUnsavedChanges = true;
   saveDraft();
   updateUnsavedIndicator();
@@ -1131,10 +1157,11 @@ function assignMeal(key, mealId) {
 }
 
 /**
- * Remove a meal from a slot. Updates state, saves draft, re-renders.
+ * Remove a specific meal from a slot. Updates state, saves draft, re-renders.
  */
-function removeMeal(key) {
-  currentPlan[key] = null;
+function removeMeal(key, mealId) {
+  if (!Array.isArray(currentPlan[key])) { currentPlan[key] = []; return; }
+  currentPlan[key] = currentPlan[key].filter(function(id) { return id !== mealId; });
   hasUnsavedChanges = true;
   saveDraft();
   updateUnsavedIndicator();
@@ -1152,7 +1179,7 @@ function clearWeek() {
   ALL_DAYS.forEach(function(day) {
     MEALS_OF_DAY.forEach(function(mealTime) {
       PEOPLE.forEach(function(person) {
-        currentPlan[slotKey(day, mealTime, person)] = null;
+        currentPlan[slotKey(day, mealTime, person)] = [];
       });
     });
   });
