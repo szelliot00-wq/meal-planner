@@ -427,12 +427,30 @@ function syncFromServer() {
   fetch(API_BASE + '/plan')
     .then(function(r) { return r.json(); })
     .then(function(data) {
-      if (!data || !data.current) return;
+      if (!data) return;
 
       // Update shared history in localStorage so the week dropdown shows it
       if (data.history && data.history.length > 0) {
         try { localStorage.setItem('mealPlannerHistory', JSON.stringify(data.history)); } catch (e) {}
       }
+
+      // If the server's recipes version has changed, clear the cache and re-fetch
+      if (data.recipes_version !== undefined) {
+        var localVersion = parseInt(localStorage.getItem('mealPlannerRecipesVersion') || '0', 10);
+        if (data.recipes_version > localVersion) {
+          try { localStorage.setItem('mealPlannerRecipesVersion', String(data.recipes_version)); } catch (e) {}
+          clearMealsCache();
+          loadMeals(function(meals, sheetFavourites) {
+            MEALS = meals;
+            mergeSheetFavourites(sheetFavourites);
+            renderMealList();
+            renderWeekGrid();
+          });
+          return; // renderWeekGrid called above — skip plan sync this cycle
+        }
+      }
+
+      if (!data.current) return;
 
       // Only apply the plan if it's for the current week
       if (data.current.weekId !== getCustomWeekId(new Date())) return;
