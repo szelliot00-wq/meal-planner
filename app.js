@@ -1327,8 +1327,8 @@ function showPendingModal() {
         var actions = document.createElement('div');
         actions.className = 'pending-card-actions';
 
-        // Approve button (TikTok recipes only — kids can't self-approve requests)
-        if (item.type !== 'request') {
+        // Approve button — shown for all pending items
+        {
           var approveBtn = document.createElement('button');
           approveBtn.className = 'btn btn-primary pending-action-btn';
           approveBtn.textContent = 'Approve';
