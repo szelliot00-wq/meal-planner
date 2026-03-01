@@ -583,6 +583,7 @@ function transformSheetData(recipesRows, ingredientsRows) {
   // Build the meals array and extract sheet-defined favourites
   var meals = [];
   var sheetFavourites = { steve: {}, zoe: {}, dylan: {} };
+  var seenIds = {};
 
   for (var j = 1; j < recipesRows.length; j++) {
     var r = recipesRows[j];
@@ -596,6 +597,13 @@ function transformSheetData(recipesRows, ingredientsRows) {
     if (!id) {
       id = slugify(name);
     }
+
+    // Guard against duplicate IDs — append row number to make unique
+    if (seenIds[id]) {
+      console.warn('Duplicate RecipeID "' + id + '" for "' + name + '" — fixing automatically');
+      id = id + '-' + j;
+    }
+    seenIds[id] = true;
 
     meals.push({
       id: id,
