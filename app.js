@@ -20,7 +20,8 @@
 var SHEETS_CACHE_TTL = 3600000; // 1 hour in milliseconds
 
 // ── Recipe Pipeline API (for pending review + food requests) ──
-var API_BASE = 'http://192.168.1.40:8080';
+// Empty string = same origin (served via FastAPI on port 8080)
+var API_BASE = '';
 
 // All 7 days in standard order — we rotate based on startDay setting
 var ALL_DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
