@@ -20,6 +20,9 @@ var SPREADSHEET_ID = '1HBBIfMdz47mdUzzTS7IlLhuFVV5Z98EuXZJeWXFl6mw';
 var SHEETS_API_KEY = 'AIzaSyAuPCZcxEoAynplB4kODQ7v6pdym5eRovM';
 var SHEETS_CACHE_TTL = 3600000; // 1 hour in milliseconds
 
+// ── Recipe Pipeline API (for pending review + food requests) ──
+var API_BASE = 'http://192.168.1.40:8080';
+
 // All 7 days in standard order — we rotate based on startDay setting
 var ALL_DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 var DAY_LABELS = {
@@ -483,7 +486,8 @@ function transformSheetData(recipesRows, ingredientsRows) {
     instructions: rHeader.indexOf('Instructions'),
     prepTime: rHeader.indexOf('PrepTime'),
     cookTime: rHeader.indexOf('CookTime'),
-    source: rHeader.indexOf('Source')
+    source: rHeader.indexOf('Source'),
+    type: rHeader.indexOf('Type')
   };
 
   // Find column indices from the Ingredients header row
@@ -542,6 +546,7 @@ function transformSheetData(recipesRows, ingredientsRows) {
       prepTime: (rCols.prepTime >= 0 && r[rCols.prepTime]) ? r[rCols.prepTime].trim() : '',
       cookTime: (rCols.cookTime >= 0 && r[rCols.cookTime]) ? r[rCols.cookTime].trim() : '',
       source: (rCols.source >= 0 && r[rCols.source]) ? r[rCols.source].trim() : '',
+      type: (rCols.type >= 0 && r[rCols.type]) ? r[rCols.type].trim() : 'tiktok',
       ingredients: ingredientMap[id] || []
     });
   }
@@ -759,7 +764,7 @@ function renderMealList() {
 
   MEALS.forEach(function(meal) {
     var card = document.createElement('div');
-    card.className = 'meal-card';
+    card.className = meal.type === 'request' ? 'meal-card meal-card--request' : 'meal-card';
     card.draggable = true;
 
     // Meal name text
@@ -1239,6 +1244,8 @@ document.addEventListener('keydown', function(e) {
     document.getElementById('shopping-modal-overlay').hidden = true;
     document.getElementById('history-modal-overlay').hidden = true;
     document.getElementById('recipe-modal-overlay').hidden = true;
+    document.getElementById('pending-modal-overlay').hidden = true;
+    document.getElementById('request-modal-overlay').hidden = true;
   }
 });
 
@@ -1248,7 +1255,197 @@ document.getElementById('start-day-select').addEventListener('change', function(
 });
 
 
-// ── SECTION 10: Initialization ────────────────
+// ── SECTION 10: Pending Review + Food Requests ──
+
+/**
+ * Fetch the count of pending recipes and update the badge in the header.
+ * Shows the badge if count > 0, hides it if 0. Silently fails if offline.
+ */
+function checkPendingCount() {
+  fetch(API_BASE + '/pending')
+    .then(function(r) { return r.json(); })
+    .then(function(items) {
+      var btn = document.getElementById('pending-btn');
+      var countEl = document.getElementById('pending-count');
+      if (items.length > 0) {
+        countEl.textContent = items.length;
+        btn.hidden = false;
+      } else {
+        btn.hidden = true;
+      }
+    })
+    .catch(function() { /* server offline — badge stays hidden */ });
+}
+
+/**
+ * Show the pending review modal with approve/reject buttons.
+ * TikTok recipes get Approve + Reject; food requests get Reject only.
+ */
+function showPendingModal() {
+  var overlay = document.getElementById('pending-modal-overlay');
+  var content = document.getElementById('pending-modal-content');
+  content.innerHTML = '<p>Loading...</p>';
+  overlay.hidden = false;
+
+  fetch(API_BASE + '/pending')
+    .then(function(r) { return r.json(); })
+    .then(function(items) {
+      if (items.length === 0) {
+        content.innerHTML = '<p class="pending-empty">No recipes to review.</p>';
+        return;
+      }
+
+      content.innerHTML = '';
+      items.forEach(function(item) {
+        var card = document.createElement('div');
+        card.className = item.type === 'request'
+          ? 'pending-card pending-card--request'
+          : 'pending-card';
+        card.id = 'pending-card-' + item.recipe_id;
+
+        var nameEl = document.createElement('div');
+        nameEl.className = 'pending-card-name';
+        nameEl.textContent = item.recipe_name;
+        card.appendChild(nameEl);
+
+        if (item.type === 'request') {
+          var tagEl = document.createElement('span');
+          tagEl.className = 'pending-tag pending-tag--request';
+          tagEl.textContent = 'Food request';
+          card.appendChild(tagEl);
+        } else if (item.instructions) {
+          var snippetEl = document.createElement('div');
+          snippetEl.className = 'pending-card-snippet';
+          // Show first ~120 chars of instructions as a preview
+          var snippet = item.instructions.replace(/\n/g, ' ');
+          snippetEl.textContent = snippet.length > 120
+            ? snippet.slice(0, 120) + '...'
+            : snippet;
+          card.appendChild(snippetEl);
+        }
+
+        var actions = document.createElement('div');
+        actions.className = 'pending-card-actions';
+
+        // Approve button (TikTok recipes only — kids can't self-approve requests)
+        if (item.type !== 'request') {
+          var approveBtn = document.createElement('button');
+          approveBtn.className = 'btn btn-primary pending-action-btn';
+          approveBtn.textContent = 'Approve';
+          (function(id) {
+            approveBtn.addEventListener('click', function() {
+              approveBtn.disabled = true;
+              fetch(API_BASE + '/approve/' + id, { method: 'POST' })
+                .then(function() {
+                  document.getElementById('pending-card-' + id).remove();
+                  decrementPendingBadge();
+                  clearMealsCache(); // force sidebar to reload with new recipe
+                  if (!document.querySelector('.pending-card')) {
+                    content.innerHTML = '<p class="pending-empty">No recipes to review.</p>';
+                  }
+                })
+                .catch(function() { showToast('Approve failed — try again'); approveBtn.disabled = false; });
+            });
+          })(item.recipe_id);
+          actions.appendChild(approveBtn);
+        }
+
+        // Reject button (always shown)
+        var rejectBtn = document.createElement('button');
+        rejectBtn.className = 'btn btn-secondary pending-action-btn';
+        rejectBtn.textContent = 'Reject';
+        (function(id) {
+          rejectBtn.addEventListener('click', function() {
+            rejectBtn.disabled = true;
+            fetch(API_BASE + '/pending/' + id, { method: 'DELETE' })
+              .then(function() {
+                document.getElementById('pending-card-' + id).remove();
+                decrementPendingBadge();
+                if (!document.querySelector('.pending-card')) {
+                  content.innerHTML = '<p class="pending-empty">No recipes to review.</p>';
+                }
+              })
+              .catch(function() { showToast('Reject failed — try again'); rejectBtn.disabled = false; });
+          });
+        })(item.recipe_id);
+        actions.appendChild(rejectBtn);
+
+        card.appendChild(actions);
+        content.appendChild(card);
+      });
+    })
+    .catch(function() {
+      content.innerHTML = '<p class="pending-empty">Could not load pending recipes.</p>';
+    });
+}
+
+/** Decrement the pending badge count; hide badge if it reaches zero. */
+function decrementPendingBadge() {
+  var btn = document.getElementById('pending-btn');
+  var countEl = document.getElementById('pending-count');
+  var n = parseInt(countEl.textContent, 10) - 1;
+  if (n <= 0) {
+    btn.hidden = true;
+  } else {
+    countEl.textContent = n;
+  }
+}
+
+/**
+ * Submit a food request to the pipeline API.
+ * On success closes the modal and shows a confirmation toast.
+ */
+function submitFoodRequest(name) {
+  fetch(API_BASE + '/request', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: name })
+  })
+    .then(function(r) { return r.json(); })
+    .then(function() {
+      document.getElementById('request-modal-overlay').hidden = true;
+      document.getElementById('request-food-input').value = '';
+      showToast('Request sent!');
+      checkPendingCount(); // update badge to reflect new request
+    })
+    .catch(function() {
+      showToast('Could not send request — are you on home WiFi?');
+    });
+}
+
+// Pending modal open/close
+document.getElementById('pending-btn').addEventListener('click', showPendingModal);
+document.getElementById('pending-modal-close').addEventListener('click', function() {
+  document.getElementById('pending-modal-overlay').hidden = true;
+});
+document.getElementById('pending-modal-done').addEventListener('click', function() {
+  document.getElementById('pending-modal-overlay').hidden = true;
+});
+
+// Food request modal open/close/submit
+document.getElementById('food-request-btn').addEventListener('click', function() {
+  document.getElementById('request-food-input').value = '';
+  document.getElementById('request-modal-overlay').hidden = false;
+  document.getElementById('request-food-input').focus();
+});
+document.getElementById('request-modal-close').addEventListener('click', function() {
+  document.getElementById('request-modal-overlay').hidden = true;
+});
+document.getElementById('request-modal-submit').addEventListener('click', function() {
+  var name = document.getElementById('request-food-input').value.trim();
+  if (!name) return;
+  submitFoodRequest(name);
+});
+// Submit on Enter key in the input
+document.getElementById('request-food-input').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') {
+    var name = this.value.trim();
+    if (name) submitFoodRequest(name);
+  }
+});
+
+
+// ── SECTION 11: Initialization ────────────────
 
 /**
  * Initialize the app. Loads meals (potentially async from Google Sheets),
@@ -1277,6 +1474,9 @@ function initApp() {
     updateRecipeSource();
     console.log('Meal Planner loaded (' + MEALS.length + ' recipes)');
   });
+
+  // Check for pending recipes to review (badge in header)
+  checkPendingCount();
 }
 
 // Start the app

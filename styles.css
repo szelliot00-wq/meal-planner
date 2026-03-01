@@ -109,6 +109,26 @@ body {
   background: #cbd5e1;
 }
 
+/* Pending review badge in the header */
+.btn-warning {
+  background: #d97706;
+  color: #fff;
+}
+.btn-warning:hover {
+  background: #b45309;
+}
+
+/* New Food Request button in the sidebar */
+.btn-request {
+  background: #fee2e2;
+  color: #b91c1c;
+  width: 100%;
+  margin-top: 0.5rem;
+}
+.btn-request:hover {
+  background: #fecaca;
+}
+
 /* ── Page layout: content (left) + sidebar (right) ── */
 .layout {
   display: grid;
@@ -240,6 +260,12 @@ body {
 .meal-card.dragging {
   opacity: 0.4;
   cursor: grabbing;
+}
+
+/* Food requests approved from the Pending tab — red left border */
+.meal-card--request {
+  border-left: 3px solid #e53e3e;
+  opacity: 0.85;
 }
 
 /* ── History list ── */
@@ -619,4 +645,77 @@ body {
     gap: 0.5rem;
     text-align: center;
   }
+}
+
+/* ── Pending review cards ── */
+.pending-card {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.pending-card--request {
+  border-left: 3px solid #e53e3e;
+  background: #fff5f5;
+}
+
+.pending-card-name {
+  font-weight: 600;
+  font-size: 0.95rem;
+  margin-bottom: 0.25rem;
+}
+
+.pending-card-snippet {
+  font-size: 0.8rem;
+  color: #64748b;
+  margin-bottom: 0.5rem;
+}
+
+.pending-tag {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  margin-bottom: 0.5rem;
+}
+
+.pending-tag--request {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.pending-card-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.pending-action-btn {
+  width: auto;
+  font-size: 0.8rem;
+}
+
+.pending-empty {
+  color: #94a3b8;
+  text-align: center;
+  padding: 1.5rem 0;
+}
+
+/* ── Food request text input ── */
+.request-food-input {
+  width: 100%;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 1rem;
+  outline: none;
+  box-sizing: border-box;
+}
+.request-food-input:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
 }

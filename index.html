@@ -24,6 +24,9 @@
           <option value="sun">Sunday</option>
         </select>
         <span class="week-label" id="week-label"></span>
+        <button class="btn btn-warning" id="pending-btn" hidden>
+          <span id="pending-count">0</span> to review
+        </button>
         <span class="unsaved-indicator" id="unsaved-indicator" hidden>Unsaved changes</span>
         <button class="btn btn-primary" id="save-btn">Save Week</button>
       </div>
@@ -45,6 +48,7 @@
           <!-- Populated by JS: draggable meal cards -->
         </div>
         <button class="btn btn-secondary refresh-recipes-btn" id="refresh-recipes-btn" hidden>Refresh Recipes</button>
+        <button class="btn btn-request" id="food-request-btn">+ New Food Request</button>
 
         <hr class="sidebar-divider">
 
@@ -88,6 +92,39 @@
         </div>
         <div class="modal-footer">
           <button class="btn btn-primary" id="copy-week-btn">Copy to Current Week</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== PENDING REVIEW MODAL ===== -->
+    <div class="modal-overlay" id="pending-modal-overlay" hidden>
+      <div class="modal">
+        <div class="modal-header">
+          <h2>Recipes to Review</h2>
+          <button class="modal-close" id="pending-modal-close">&times;</button>
+        </div>
+        <div class="modal-body" id="pending-modal-content">
+          <!-- Populated by JS -->
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" id="pending-modal-done">Close</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== FOOD REQUEST MODAL ===== -->
+    <div class="modal-overlay" id="request-modal-overlay" hidden>
+      <div class="modal">
+        <div class="modal-header">
+          <h2>Request a Food</h2>
+          <button class="modal-close" id="request-modal-close">&times;</button>
+        </div>
+        <div class="modal-body">
+          <input type="text" id="request-food-input" class="request-food-input"
+            placeholder="What do you want to eat?" autocomplete="off">
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-primary" id="request-modal-submit">Send Request</button>
         </div>
       </div>
     </div>
