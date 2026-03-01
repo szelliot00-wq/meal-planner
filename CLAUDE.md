@@ -29,12 +29,14 @@ Hosted on the spare MacBook Pro at `http://192.168.1.40:8090/app` via FastAPI/uv
 - `config.example.js` — template for config.js
 
 ## Config (API keys)
-Keys live in `config.js` (gitignored). Copy `config.example.js` to `config.js` and fill in:
+Keys live in `config.js` (gitignored — never commit). Copy `config.example.js` to `config.js` and fill in your values:
 ```js
 var SPREADSHEET_ID = '1HBBIfMdz47mdUzzTS7IlLhuFVV5Z98EuXZJeWXFl6mw';
-var SHEETS_API_KEY = 'AIzaSyB5mR3I2KAG2wQ1f0sEdXmJuKTgozdFRwM';
+var SHEETS_API_KEY = '<your read-only Sheets API key>';
 ```
 On the MacBook Pro the file lives at `~/Claude-projects/meal-planner/config.js` — it is NOT deployed via git, so create it manually after any fresh clone.
+
+⚠️ The API key must never appear in any committed file (app.js, CLAUDE.md, etc). Previous keys were accidentally committed and had to be revoked.
 
 ## Data
 - 5 default meals with per-person ingredients (used when Google Sheets is not configured)
