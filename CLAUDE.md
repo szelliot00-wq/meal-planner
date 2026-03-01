@@ -6,7 +6,7 @@ A weekly meal planning web app for Steve, Zoe, and Dylan. Drag and drop meals on
 ## How to run
 Open `index.html` in a browser. No server or build step needed.
 
-Hosted on the spare MacBook Pro at `http://192.168.1.40:8090` via `python3 -m http.server 8090` (launchd agent `com.steveelliott.meal-planner`).
+Hosted on the spare MacBook Pro at `http://192.168.1.40:8090/app` via FastAPI/uvicorn (launchd agent `com.steveelliott.tiktok-recipes` on port 8090).
 
 ## Key features
 - Stacked single-page layout with all 7 days visible, configurable start day (default Saturday)
@@ -18,8 +18,8 @@ Hosted on the spare MacBook Pro at `http://192.168.1.40:8090` via `python3 -m ht
 - Save weeks to history, view past weeks, copy a past week forward
 - Recipe detail modal with instructions, timing, and source link
 - Google Sheets integration for recipe database (with hardcoded fallback)
-- Pending recipe review: orange badge in header → approve or reject new recipes
-- Food requests: kids tap "+ New Food Request", enter their name and food — goes to Pending tab
+- Pending recipe review: discreet tab fixed at bottom of screen → approve or reject new recipes
+- Food requests: kids tap "+ New Food Request", select Dylan or Zoe, enter food — goes to Pending tab
 
 ## Files
 - `index.html` — single page, all structure
@@ -32,7 +32,7 @@ Hosted on the spare MacBook Pro at `http://192.168.1.40:8090` via `python3 -m ht
 Keys live in `config.js` (gitignored). Copy `config.example.js` to `config.js` and fill in:
 ```js
 var SPREADSHEET_ID = '1HBBIfMdz47mdUzzTS7IlLhuFVV5Z98EuXZJeWXFl6mw';
-var SHEETS_API_KEY = 'AIzaSyAuPCZcxEoAynplB4kODQ7v6pdym5eRovM';
+var SHEETS_API_KEY = 'AIzaSyB5mR3I2KAG2wQ1f0sEdXmJuKTgozdFRwM';
 ```
 On the MacBook Pro the file lives at `~/Claude-projects/meal-planner/config.js` — it is NOT deployed via git, so create it manually after any fresh clone.
 
@@ -59,13 +59,12 @@ To load recipes from a Google Sheet:
 6. If the sheet is unavailable or not configured, the app falls back to the 5 default meals.
 
 ## Recipe approval workflow
-New TikTok recipes land in the **Pending** Google Sheet tab, not Recipes. The pipeline server at `http://192.168.1.40:8080` handles the review API.
+New TikTok recipes land in the **Pending** Google Sheet tab, not Recipes. The pipeline server handles the review API (same server, same port — `/pending`, `/approve`, etc.).
 
-- **Orange badge** in header shows count of pending items (hidden when empty)
-- **Click badge** → review modal with Approve / Reject per recipe
-  - Approve: moves row from Pending to Recipes (meal becomes available immediately after cache expires)
-  - Reject: deletes row from Pending
-- Food requests (type=`request`) show in red with a "Food request" tag; can only be Rejected (not self-approved)
+- **Discreet tab** fixed at the bottom centre of the screen — semi-transparent, only visible if you know it's there. Shows count of pending items; hidden when empty.
+- **Click tab** → review modal with Approve / Reject per item (both TikTok recipes and food requests)
+  - Approve: moves row from Pending to Recipes instantly (UI updates immediately; Sheets write in background)
+  - Reject: deletes row from Pending instantly
 - After approving, click "Refresh Recipes" in the sidebar to reload the meal list immediately
 
 ## Food requests
@@ -76,14 +75,14 @@ Kids tap **"+ New Food Request"** at the top of the sidebar:
 - The request is sent to the pipeline API in the background and appears in Pending with `type=request`
 - Approved requests appear in the meal sidebar with a red left border
 
-## Pipeline API (http://192.168.1.40:8080)
-The `API_BASE` variable in `app.js` points to the pipeline server. All calls are fire-and-forget or read-only:
+## Pipeline API (same server, port 8090)
+The `API_BASE` variable in `app.js` is `''` (empty string = same origin). All calls go to the same FastAPI server that serves the static files:
 - `GET /pending` — fetch count and list of pending items
-- `POST /approve/{id}` — approve a recipe
-- `DELETE /pending/{id}` — reject a recipe
-- `POST /request` — submit a food request
+- `POST /approve/{id}` — approve a recipe (moves to Recipes tab)
+- `DELETE /pending/{id}` — reject a recipe (deletes from Pending)
+- `POST /request` — submit a food request (body: `{"name": "Dylan: Pizza"}`)
 
-The meal planner silently ignores API errors (badge stays hidden, toasts don't error) so it still works offline or away from home WiFi.
+The meal planner silently ignores API errors so it still works offline or away from home WiFi.
 
 ## Shopping list format
 Ingredients from all sources (Google Sheets and DEFAULT_MEALS) use the same unified format:
