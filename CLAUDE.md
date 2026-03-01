@@ -59,7 +59,7 @@ Recipes tab columns: `RecipeID | RecipeName | Instructions | PrepTime | CookTime
 
 - Fetched range is `A:J`
 - `Y` in H/I/J marks a meal as a default favourite for that person
-- Recipes are cached in localStorage for 1 hour (key: `mealPlannerRecipeCache`)
+- Recipe cache is cleared on every page load — always fetches fresh from Sheets
 - Falls back to 5 hardcoded default meals if Sheets not configured
 
 ## Recipe approval workflow
@@ -105,7 +105,7 @@ When a recipe is approved on the server, `recipes_version` in `plan.json` is inc
 | `mealPlannerFavourites2` | `{ person: { mealId: bool } }` |
 | `mealPlannerCurrent` | Current week plan |
 | `mealPlannerHistory` | Array of past week entries (max 12) |
-| `mealPlannerRecipeCache` | Cached sheet data + timestamp |
+| `mealPlannerRecipeCache` | Cached sheet data + timestamp (cleared on every page load) |
 | `mealPlannerRecipesVersion` | Last known `recipes_version` from server (for cache invalidation) |
 | `mealPlannerStartDay` | `'mon'`…`'sun'` |
 
