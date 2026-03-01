@@ -16,8 +16,7 @@
 // 3. Get a Google Sheets API key from Google Cloud Console
 // 4. Fill in SPREADSHEET_ID and SHEETS_API_KEY below
 // Leave SPREADSHEET_ID as empty string to use the hardcoded fallback meals.
-var SPREADSHEET_ID = '1HBBIfMdz47mdUzzTS7IlLhuFVV5Z98EuXZJeWXFl6mw';
-var SHEETS_API_KEY = 'AIzaSyAuPCZcxEoAynplB4kODQ7v6pdym5eRovM';
+// SPREADSHEET_ID and SHEETS_API_KEY are loaded from config.js (gitignored)
 var SHEETS_CACHE_TTL = 3600000; // 1 hour in milliseconds
 
 // ── Recipe Pipeline API (for pending review + food requests) ──
@@ -1437,7 +1436,11 @@ document.getElementById('request-modal-close').addEventListener('click', functio
 });
 document.getElementById('request-modal-submit').addEventListener('click', function() {
   var name = document.getElementById('request-food-input').value.trim();
-  if (!name) return;
+  if (!name) {
+    document.getElementById('request-food-input').focus();
+    showToast('Please type what you want first!');
+    return;
+  }
   submitFoodRequest(name);
 });
 // Submit on Enter key in the input
