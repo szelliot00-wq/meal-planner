@@ -1399,21 +1399,19 @@ function submitFoodRequest(name) {
   var whoEl = document.querySelector('input[name="request-who"]:checked');
   var who = whoEl ? whoEl.value : '';
   var fullName = who ? who + ': ' + name : name;
+
+  // Close modal and show feedback immediately — don't make the user wait for the API
+  document.getElementById('request-modal-overlay').hidden = true;
+  document.getElementById('request-food-input').value = '';
+  showToast('Request sent!');
+
   fetch(API_BASE + '/request', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name: fullName })
   })
-    .then(function(r) { return r.json(); })
-    .then(function() {
-      document.getElementById('request-modal-overlay').hidden = true;
-      document.getElementById('request-food-input').value = '';
-      showToast('Request sent!');
-      checkPendingCount(); // update badge to reflect new request
-    })
-    .catch(function() {
-      showToast('Could not send request — are you on home WiFi?');
-    });
+    .then(function() { checkPendingCount(); })
+    .catch(function() { /* silent — request may have still gone through */ });
 }
 
 // Pending modal open/close
