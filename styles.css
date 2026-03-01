@@ -402,10 +402,7 @@ body {
 }
 
 /* Food requests approved from the Pending tab — red left border */
-.meal-card--request {
-  border-left: 3px solid #e53e3e;
-  opacity: 0.85;
-}
+.meal-card--request {}
 
 /* ── History list ── */
 .history-list {
