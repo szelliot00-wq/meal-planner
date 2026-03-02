@@ -129,6 +129,23 @@ body {
   opacity: 1;
 }
 
+/* Locked week banner — shown to Zoe/Dylan when Daddy locks the week */
+.locked-banner {
+  background: #fef3c7;
+  border-bottom: 2px solid #fcd34d;
+  color: #92400e;
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 0.45rem 1rem;
+  text-align: center;
+}
+
+/* Lock button active state (when week is locked) */
+.btn-lock-active {
+  background: #f97316 !important;
+  color: #fff !important;
+}
+
 /* New Food Request button in the sidebar */
 .btn-request {
   background: #fee2e2;

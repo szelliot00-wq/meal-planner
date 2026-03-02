@@ -145,6 +145,12 @@ var favourites = {};
 // Current text in the meal search/filter input
 var mealFilter = '';
 
+// Whether the current week is locked (Daddy only can change this)
+var weekLocked = false;
+
+// The week ID that was locked (to detect when the week rolls over)
+var lockedWeekId = '';
+
 
 // ── SECTION 3: Utility Functions ───────────────
 
@@ -231,6 +237,20 @@ function getCustomWeekId(date) {
   var m = String(weekStart.getMonth() + 1).padStart(2, '0');
   var d = String(weekStart.getDate()).padStart(2, '0');
   return y + '-' + m + '-' + d;
+}
+
+/**
+ * Returns the "effective" date for rendering purposes.
+ * When the week is locked and the current user is not Daddy,
+ * returns a date 7 days in the future (next week).
+ */
+function getViewDate() {
+  if (weekLocked && currentUser && currentUser !== 'steve') {
+    var d = new Date();
+    d.setDate(d.getDate() + 7);
+    return d;
+  }
+  return new Date();
 }
 
 /**
@@ -328,47 +348,59 @@ function loadStartDay() {
 
 /**
  * Save the current plan to history. Called automatically on every change.
+ * When the week is locked and the user is not Daddy, saves to the next-week store.
  */
 function savePlan() {
-  var weekId = getCustomWeekId(new Date());
+  var isNextWeek = weekLocked && currentUser && currentUser !== 'steve';
+  var viewDate = getViewDate();
+  var weekId = getCustomWeekId(viewDate);
   var entry = {
     weekId: weekId,
-    weekLabel: getWeekLabel(new Date()),
+    weekLabel: getWeekLabel(viewDate),
     savedAt: new Date().toISOString(),
     plan: JSON.parse(JSON.stringify(currentPlan))
   };
 
   try {
-    localStorage.setItem('mealPlannerCurrent', JSON.stringify(entry));
-
-    var history = loadHistory();
-    var existingIndex = -1;
-    for (var i = 0; i < history.length; i++) {
-      if (history[i].weekId === weekId) {
-        existingIndex = i;
-        break;
-      }
-    }
-
-    if (existingIndex !== -1) {
-      history[existingIndex] = entry;
+    if (isNextWeek) {
+      // Save next-week plan separately — no history entry
+      localStorage.setItem('mealPlannerNext', JSON.stringify(entry));
+      fetch(API_BASE + '/plan/next', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ current: entry })
+      }).catch(function() {});
     } else {
-      history.unshift(entry);
+      localStorage.setItem('mealPlannerCurrent', JSON.stringify(entry));
+
+      var history = loadHistory();
+      var existingIndex = -1;
+      for (var i = 0; i < history.length; i++) {
+        if (history[i].weekId === weekId) {
+          existingIndex = i;
+          break;
+        }
+      }
+
+      if (existingIndex !== -1) {
+        history[existingIndex] = entry;
+      } else {
+        history.unshift(entry);
+      }
+
+      if (history.length > 12) {
+        history = history.slice(0, 12);
+      }
+
+      localStorage.setItem('mealPlannerHistory', JSON.stringify(history));
+
+      // Sync to server in the background so other devices see the change
+      fetch(API_BASE + '/plan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ current: entry, history: history })
+      }).catch(function() {}); // silently ignore if offline
     }
-
-    if (history.length > 12) {
-      history = history.slice(0, 12);
-    }
-
-    localStorage.setItem('mealPlannerHistory', JSON.stringify(history));
-
-    // Sync to server in the background so other devices see the change
-    fetch(API_BASE + '/plan', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ current: entry, history: history })
-    }).catch(function() {}); // silently ignore if offline
-
   } catch (e) {
     showToast('Error saving — storage may be full');
   }
@@ -404,10 +436,20 @@ function migratePlan(plan) {
 
 /**
  * Load the plan on startup.
- * Priority: saved current week > empty plan.
- * Migrates old single-string slot format to arrays.
+ * When week is locked and current user is not Daddy, loads the next-week plan.
+ * Otherwise loads the current week. Migrates old single-string slot format to arrays.
  */
 function loadOnStartup() {
+  if (weekLocked && currentUser && currentUser !== 'steve') {
+    try {
+      var nextData = JSON.parse(localStorage.getItem('mealPlannerNext'));
+      if (nextData && nextData.plan) {
+        return migratePlan(nextData.plan);
+      }
+    } catch (e) { /* ignore */ }
+    return createEmptyPlan();
+  }
+
   try {
     var data = JSON.parse(localStorage.getItem('mealPlannerCurrent'));
     if (data && data.weekId === getCustomWeekId(new Date())) {
@@ -420,6 +462,7 @@ function loadOnStartup() {
 
 /**
  * Fetch the shared plan from the server and update if newer.
+ * Handles lock state changes, next-week plan for Zoe/Dylan, and week rollover.
  * Falls back silently if offline. Re-renders the grid if the plan changed.
  */
 function syncFromServer() {
@@ -450,18 +493,92 @@ function syncFromServer() {
         }
       }
 
-      if (!data.current) return;
+      // Handle lock state from server
+      if (data.locked !== undefined) {
+        var serverLocked = !!data.locked;
+        var serverLockedWeekId = data.locked_week_id || '';
+        var currentWeekId = getCustomWeekId(new Date());
 
-      // Only apply the plan if it's for the current week
-      if (data.current.weekId !== getCustomWeekId(new Date())) return;
+        // Week has rolled over: locked week is in the past — promote next → current
+        if (serverLocked && serverLockedWeekId && serverLockedWeekId !== currentWeekId) {
+          var promotedPlan = (data.next && data.next.plan)
+            ? migratePlan(JSON.parse(JSON.stringify(data.next.plan)))
+            : createEmptyPlan();
+          var promotedEntry = {
+            weekId: currentWeekId,
+            weekLabel: getWeekLabel(new Date()),
+            savedAt: new Date().toISOString(),
+            plan: promotedPlan
+          };
+          currentPlan = promotedPlan;
+          try { localStorage.setItem('mealPlannerCurrent', JSON.stringify(promotedEntry)); } catch (e) {}
+          try { localStorage.removeItem('mealPlannerNext'); } catch (e) {}
+          weekLocked = false;
+          lockedWeekId = '';
+          try { localStorage.setItem('mealPlannerLocked', '0'); } catch (e) {}
+          try { localStorage.setItem('mealPlannerLockedWeekId', ''); } catch (e) {}
+          // Tell server to clear the lock
+          fetch(API_BASE + '/lock', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ locked: false, week_id: '' })
+          }).catch(function() {});
+          renderLockControls();
+          updateWeekLabel();
+          renderWeekGrid();
+          return;
+        }
 
-      var incoming = JSON.stringify(data.current.plan);
-      var current  = JSON.stringify(currentPlan);
-      if (incoming === current) return; // nothing changed
+        // Apply any change in lock state
+        if (serverLocked !== weekLocked || serverLockedWeekId !== lockedWeekId) {
+          var wasViewingNextWeek = weekLocked && currentUser && currentUser !== 'steve';
+          weekLocked = serverLocked;
+          lockedWeekId = serverLockedWeekId;
+          try { localStorage.setItem('mealPlannerLocked', weekLocked ? '1' : '0'); } catch (e) {}
+          try { localStorage.setItem('mealPlannerLockedWeekId', lockedWeekId); } catch (e) {}
+          renderLockControls();
+          updateWeekLabel();
 
-      currentPlan = migratePlan(data.current.plan);
-      try { localStorage.setItem('mealPlannerCurrent', JSON.stringify(data.current)); } catch (e) {}
-      renderWeekGrid();
+          var nowViewingNextWeek = weekLocked && currentUser && currentUser !== 'steve';
+          if (nowViewingNextWeek && !wasViewingNextWeek) {
+            // Just became locked — switch to next week plan
+            var nextPlan = (data.next && data.next.plan)
+              ? migratePlan(JSON.parse(JSON.stringify(data.next.plan)))
+              : createEmptyPlan();
+            currentPlan = nextPlan;
+            try { localStorage.setItem('mealPlannerNext', JSON.stringify(data.next || { weekId: getCustomWeekId(getViewDate()), plan: nextPlan })); } catch (e) {}
+            renderWeekGrid();
+            return;
+          }
+          if (!nowViewingNextWeek && wasViewingNextWeek) {
+            // Just unlocked — switch back to current week plan
+            currentPlan = (data.current && data.current.plan)
+              ? migratePlan(data.current.plan)
+              : createEmptyPlan();
+            renderWeekGrid();
+            return;
+          }
+        }
+      }
+
+      // Sync the appropriate plan
+      var isViewingNextWeek = weekLocked && currentUser && currentUser !== 'steve';
+      if (isViewingNextWeek) {
+        if (!data.next) return;
+        var incomingNext = JSON.stringify(data.next.plan || {});
+        if (incomingNext === JSON.stringify(currentPlan)) return;
+        currentPlan = migratePlan(data.next.plan || {});
+        try { localStorage.setItem('mealPlannerNext', JSON.stringify(data.next)); } catch (e) {}
+        renderWeekGrid();
+      } else {
+        if (!data.current) return;
+        if (data.current.weekId !== getCustomWeekId(new Date())) return;
+        var incomingCurr = JSON.stringify(data.current.plan);
+        if (incomingCurr === JSON.stringify(currentPlan)) return;
+        currentPlan = migratePlan(data.current.plan);
+        try { localStorage.setItem('mealPlannerCurrent', JSON.stringify(data.current)); } catch (e) {}
+        renderWeekGrid();
+      }
     })
     .catch(function() {}); // silently ignore if offline
 }
@@ -917,8 +1034,15 @@ function setCurrentUser(person) {
   document.getElementById('meal-search').value = '';
   try { localStorage.setItem('mealPlannerCurrentUser', person); } catch (e) {}
   document.getElementById('person-selector-overlay').hidden = true;
+  // If week is locked, switch which plan we're viewing based on the new identity
+  if (weekLocked) {
+    currentPlan = loadOnStartup();
+    updateWeekLabel();
+  }
   renderViewingAs();
+  renderLockControls();
   renderMealList();
+  renderWeekGrid();
 }
 
 /**
@@ -934,6 +1058,32 @@ function renderViewingAs() {
   el.innerHTML = 'Viewing as: <strong>' + PEOPLE_LABELS[currentUser] + '</strong> \u00b7 ' +
     '<button class="switch-user-btn" id="switch-user-btn">Switch</button>';
   document.getElementById('switch-user-btn').addEventListener('click', showPersonSelector);
+}
+
+
+/**
+ * Show or hide the lock button (Daddy only) and the locked banner (Zoe/Dylan when locked).
+ */
+function renderLockControls() {
+  var btn = document.getElementById('lock-btn');
+  var banner = document.getElementById('locked-banner');
+  if (!btn || !banner) return;
+
+  if (currentUser === 'steve') {
+    btn.hidden = false;
+    if (weekLocked) {
+      btn.textContent = 'Unlock Week';
+      btn.classList.add('btn-lock-active');
+    } else {
+      btn.textContent = 'Lock Week';
+      btn.classList.remove('btn-lock-active');
+    }
+  } else {
+    btn.hidden = true;
+    btn.classList.remove('btn-lock-active');
+  }
+
+  banner.hidden = !(weekLocked && currentUser && currentUser !== 'steve');
 }
 
 
@@ -1317,7 +1467,7 @@ function showHistoryModal(entry) {
  * Update the week label in the header.
  */
 function updateWeekLabel() {
-  document.getElementById('week-label').textContent = getWeekLabel(new Date());
+  document.getElementById('week-label').textContent = getWeekLabel(getViewDate());
 }
 
 
@@ -1683,6 +1833,23 @@ document.getElementById('pending-modal-done').addEventListener('click', function
   document.getElementById('pending-modal-overlay').hidden = true;
 });
 
+// Lock/unlock week (Daddy only)
+document.getElementById('lock-btn').addEventListener('click', function() {
+  var newLocked = !weekLocked;
+  var newWeekId = newLocked ? getCustomWeekId(new Date()) : '';
+  weekLocked = newLocked;
+  lockedWeekId = newWeekId;
+  try { localStorage.setItem('mealPlannerLocked', newLocked ? '1' : '0'); } catch (e) {}
+  try { localStorage.setItem('mealPlannerLockedWeekId', lockedWeekId); } catch (e) {}
+  fetch(API_BASE + '/lock', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ locked: newLocked, week_id: newWeekId })
+  }).catch(function() {});
+  renderLockControls();
+  showToast(newLocked ? 'Week locked — kids will see next week' : 'Week unlocked');
+});
+
 // Food request modal open/close/submit
 document.getElementById('food-request-btn').addEventListener('click', function() {
   document.getElementById('request-food-input').value = '';
@@ -1720,12 +1887,23 @@ function initApp() {
   // Always fetch fresh recipes from Sheets on load — no stale cache
   clearMealsCache();
 
-  // Load synchronous settings first
+  // Load identity and lock state BEFORE loadOnStartup (they affect which plan to load)
   startDay = loadStartDay();
   document.getElementById('start-day-select').value = startDay;
-  currentPlan = loadOnStartup();
   favourites = loadFavourites();
   try { currentUser = localStorage.getItem('mealPlannerCurrentUser') || null; } catch (e) {}
+
+  // Load lock state — only active if the locked week ID still matches the current week
+  try {
+    var cachedLocked = localStorage.getItem('mealPlannerLocked') === '1';
+    var cachedLockedWeekId = localStorage.getItem('mealPlannerLockedWeekId') || '';
+    if (cachedLocked && cachedLockedWeekId === getCustomWeekId(new Date())) {
+      weekLocked = true;
+      lockedWeekId = cachedLockedWeekId;
+    }
+  } catch (e) {}
+
+  currentPlan = loadOnStartup();
   updateWeekLabel();
 
   // Show loading state in the sidebar meal list (only if Sheets is configured)
@@ -1741,6 +1919,7 @@ function initApp() {
     renderMealList();
     renderWeekGrid();
     renderViewingAs();
+    renderLockControls();
     if (!currentUser) showPersonSelector();
     console.log('Meal Planner loaded (' + MEALS.length + ' recipes)');
 

@@ -18,6 +18,7 @@ Hosted on the spare MacBook Pro at `http://192.168.1.40:8090/app` via FastAPI/uv
 - Week history in header dropdown — click current week label to see past weeks, click one to view/copy
 - Recipe detail modal with instructions, timing, and source link
 - Google Sheets integration for recipe database (with hardcoded fallback)
+- Lock Week: Daddy can lock the current week so Zoe/Dylan see next week instead; auto-clears when week rolls over
   - Columns A–G: RecipeID, RecipeName, Instructions, PrepTime, CookTime, Source, Type
   - Columns H–J: Favourite Zoe, Favourite Dylan, Favourite Daddy (Y = favourite)
 - Pending recipe review: discreet tab fixed at bottom-centre → approve or reject new recipes
@@ -85,8 +86,10 @@ Kids tap **"+ Request"** in the header:
 - `DELETE /pending/{id}` — reject a recipe
 - `POST /request` — submit a food request (body: `{"name": "Dylan: Pizza"}`)
 - `POST /favourite` — toggle a favourite (body: `{ recipe_id, person, actor, value }`)
-- `GET /plan` — fetch shared plan `{ current, history }` from server
+- `GET /plan` — fetch shared plan `{ current, history, locked, locked_week_id, next }` from server
 - `POST /plan` — save shared plan to server (body: `{ current, history }`)
+- `POST /lock` — set/clear week lock (body: `{ locked, week_id }`)
+- `POST /plan/next` — save next-week plan (body: `{ current }`) — used when week is locked
 
 ## Cross-device sync
 The current week plan, history, and recipe version are stored in `plan.json` on the server.
@@ -105,10 +108,13 @@ When a recipe is approved on the server, `recipes_version` in `plan.json` is inc
 | `mealPlannerCurrentUser` | `'steve'` \| `'zoe'` \| `'dylan'` |
 | `mealPlannerFavourites2` | `{ person: { mealId: bool } }` |
 | `mealPlannerCurrent` | Current week plan |
+| `mealPlannerNext` | Next-week plan (used when week is locked) |
 | `mealPlannerHistory` | Array of past week entries (max 12) |
 | `mealPlannerRecipeCache` | Cached sheet data + timestamp (cleared on every page load) |
 | `mealPlannerRecipesVersion` | Last known `recipes_version` from server (for cache invalidation) |
 | `mealPlannerStartDay` | `'mon'`…`'sun'` |
+| `mealPlannerLocked` | `'1'` if week is locked, else `'0'` |
+| `mealPlannerLockedWeekId` | Week ID that was locked (e.g. `'2026-03-07'`) |
 
 ## Rules
 - Keep things simple. No unnecessary libraries or frameworks.
