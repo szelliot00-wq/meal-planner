@@ -151,6 +151,12 @@ var weekLocked = false;
 // The week ID that was locked (to detect when the week rolls over)
 var lockedWeekId = '';
 
+// Which sidebar tab is active
+var sidebarTab = 'meals'; // 'meals' | 'wishes'
+
+// Last fetched wishlist data { week_id, submissions }
+var wishlistData = null;
+
 
 // ── SECTION 3: Utility Functions ───────────────
 
@@ -579,6 +585,7 @@ function syncFromServer() {
         try { localStorage.setItem('mealPlannerCurrent', JSON.stringify(data.current)); } catch (e) {}
         renderWeekGrid();
       }
+      fetchWishlists();
     })
     .catch(function() {}); // silently ignore if offline
 }
@@ -1058,6 +1065,145 @@ function renderViewingAs() {
   el.innerHTML = 'Viewing as: <strong>' + PEOPLE_LABELS[currentUser] + '</strong> \u00b7 ' +
     '<button class="switch-user-btn" id="switch-user-btn">Switch</button>';
   document.getElementById('switch-user-btn').addEventListener('click', showPersonSelector);
+}
+
+
+// ── SECTION 5C: Wishlists ───────────────────────
+
+/**
+ * Fetch wishlists from server, update badge, re-render panel if active.
+ */
+function fetchWishlists() {
+  fetch(API_BASE + '/wishlists')
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      wishlistData = data;
+      updateWishesBadge();
+      if (sidebarTab === 'wishes') renderWishesPanel();
+    })
+    .catch(function() {});
+}
+
+/**
+ * Update the Wishes tab badge with submission count.
+ */
+function updateWishesBadge() {
+  var badge = document.getElementById('wishes-badge');
+  if (!badge) return;
+  var count = wishlistData && wishlistData.submissions
+    ? Object.keys(wishlistData.submissions).length
+    : 0;
+  if (count > 0) {
+    badge.textContent = count;
+    badge.hidden = false;
+  } else {
+    badge.hidden = true;
+  }
+}
+
+/**
+ * Render share-link copy buttons (Daddy only).
+ */
+function renderShareLinks(panel) {
+  var div = document.createElement('div');
+  div.className = 'share-links';
+
+  var btnDylan = document.createElement('button');
+  btnDylan.className = 'btn-copy-link';
+  btnDylan.textContent = 'Copy Dyl-Boi link';
+  btnDylan.addEventListener('click', function() {
+    var url = window.location.origin + '/app/wishlist?for=dylan';
+    navigator.clipboard.writeText(url)
+      .then(function() { showToast('Dyl-Boi link copied!'); })
+      .catch(function() { showToast('Could not copy link'); });
+  });
+  div.appendChild(btnDylan);
+
+  var btnZoe = document.createElement('button');
+  btnZoe.className = 'btn-copy-link';
+  btnZoe.textContent = 'Copy Zbutt link';
+  btnZoe.addEventListener('click', function() {
+    var url = window.location.origin + '/app/wishlist?for=zoe';
+    navigator.clipboard.writeText(url)
+      .then(function() { showToast('Zbutt link copied!'); })
+      .catch(function() { showToast('Could not copy link'); });
+  });
+  div.appendChild(btnZoe);
+
+  panel.appendChild(div);
+}
+
+/**
+ * Render the wishes panel with ranked picks from each kid.
+ */
+function renderWishesPanel() {
+  var panel = document.getElementById('sidebar-wishes-panel');
+  if (!panel) return;
+  panel.innerHTML = '';
+
+  if (currentUser === 'steve') {
+    renderShareLinks(panel);
+  }
+
+  if (!wishlistData || !wishlistData.submissions ||
+      Object.keys(wishlistData.submissions).length === 0) {
+    var empty = document.createElement('div');
+    empty.className = 'wishes-empty';
+    empty.textContent = 'No wishlists submitted yet.';
+    panel.appendChild(empty);
+    return;
+  }
+
+  ['dylan', 'zoe'].forEach(function(person) {
+    var sub = wishlistData.submissions[person];
+
+    var header = document.createElement('div');
+    header.className = 'wishes-section-header';
+    header.textContent = PEOPLE_LABELS[person];
+    panel.appendChild(header);
+
+    if (!sub) {
+      var noSub = document.createElement('div');
+      noSub.className = 'wishes-empty';
+      noSub.textContent = 'No picks submitted yet.';
+      panel.appendChild(noSub);
+      return;
+    }
+
+    if (sub.picks && sub.picks.length > 0) {
+      sub.picks.forEach(function(mealId, idx) {
+        var meal = findMeal(mealId);
+        if (!meal) return;
+        appendMealCard(panel, meal);
+        var card = panel.lastElementChild;
+        var rankSpan = document.createElement('span');
+        rankSpan.className = 'wish-rank';
+        rankSpan.textContent = idx + 1;
+        card.insertBefore(rankSpan, card.firstChild);
+      });
+    } else {
+      var noPicks = document.createElement('div');
+      noPicks.className = 'wishes-empty';
+      noPicks.textContent = 'No meals picked.';
+      panel.appendChild(noPicks);
+    }
+
+    if (sub.notes) {
+      var notes = document.createElement('div');
+      notes.className = 'wishes-notes';
+      notes.textContent = '\u201c' + sub.notes + '\u201d';
+      panel.appendChild(notes);
+    }
+
+    if (sub.submitted_at) {
+      var ts = document.createElement('div');
+      ts.className = 'wishes-submitted-at';
+      ts.textContent = new Date(sub.submitted_at).toLocaleString('en-GB', {
+        day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'
+      });
+      panel.appendChild(ts);
+    }
+  });
 }
 
 
@@ -1667,6 +1813,25 @@ document.getElementById('start-day-select').addEventListener('change', function(
   changeStartDay(this.value);
 });
 
+// Sidebar tab switching
+document.getElementById('tab-meals').addEventListener('click', function() {
+  sidebarTab = 'meals';
+  document.getElementById('tab-meals').classList.add('sidebar-tab--active');
+  document.getElementById('tab-wishes').classList.remove('sidebar-tab--active');
+  document.getElementById('sidebar-meals-panel').hidden = false;
+  document.getElementById('sidebar-wishes-panel').hidden = true;
+});
+
+document.getElementById('tab-wishes').addEventListener('click', function() {
+  sidebarTab = 'wishes';
+  document.getElementById('tab-wishes').classList.add('sidebar-tab--active');
+  document.getElementById('tab-meals').classList.remove('sidebar-tab--active');
+  document.getElementById('sidebar-meals-panel').hidden = true;
+  document.getElementById('sidebar-wishes-panel').hidden = false;
+  fetchWishlists();
+  renderWishesPanel();
+});
+
 
 // ── SECTION 10: Pending Review + Food Requests ──
 
@@ -1925,6 +2090,7 @@ function initApp() {
 
     // Initial sync from server — overrides localStorage if server has newer data
     syncFromServer();
+    fetchWishlists();
   });
 
   // Check for pending recipes to review (badge in header)

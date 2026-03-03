@@ -949,3 +949,102 @@ body {
   padding: 0;
   text-decoration: underline;
 }
+
+/* ── Sidebar tab bar ── */
+.sidebar-tabs {
+  display: flex;
+  border-bottom: 1px solid #e2e8f0;
+  margin-bottom: 0.5rem;
+  flex-shrink: 0;
+}
+.sidebar-tab {
+  flex: 1;
+  padding: 0.4rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: #64748b;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+.sidebar-tab--active {
+  color: #6366f1;
+  border-bottom-color: #6366f1;
+}
+.wishes-badge {
+  display: inline-block;
+  background: #ef4444;
+  color: #fff;
+  font-size: 0.6rem;
+  border-radius: 10px;
+  padding: 0 5px;
+  margin-left: 4px;
+  vertical-align: middle;
+}
+
+/* ── Sidebar panels ── */
+#sidebar-meals-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+#sidebar-wishes-panel {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* ── Wishes panel content ── */
+.wishes-section-header {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #94a3b8;
+  margin: 0.6rem 0 0.3rem;
+}
+.wishes-empty {
+  font-size: 0.75rem;
+  color: #94a3b8;
+  padding: 0.5rem 0;
+}
+.wishes-notes {
+  font-size: 0.72rem;
+  color: #64748b;
+  padding: 0.3rem 0;
+  font-style: italic;
+}
+.wishes-submitted-at {
+  font-size: 0.65rem;
+  color: #94a3b8;
+}
+.wish-rank {
+  display: inline-block;
+  background: #e0e7ff;
+  color: #6366f1;
+  font-size: 0.65rem;
+  font-weight: 700;
+  border-radius: 4px;
+  padding: 1px 5px;
+  margin-right: 4px;
+}
+.share-links {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin-bottom: 0.75rem;
+}
+.btn-copy-link {
+  font-size: 0.7rem;
+  padding: 0.3rem 0.5rem;
+  text-align: left;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.btn-copy-link:hover { background: #e2e8f0; }

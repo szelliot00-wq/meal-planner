@@ -39,10 +39,20 @@
 
       <!-- --- Sidebar on the RIGHT: meal menu + actions --- -->
       <aside class="sidebar">
-        <h2 class="sidebar-title">Meals</h2>
-        <input type="text" id="meal-search" class="meal-search" placeholder="Filter meals..." autocomplete="off">
-        <div class="meal-list" id="meal-list">
-          <!-- Populated by JS: draggable meal cards -->
+        <div class="sidebar-tabs">
+          <button class="sidebar-tab sidebar-tab--active" id="tab-meals">Meals</button>
+          <button class="sidebar-tab" id="tab-wishes">Wishes<span class="wishes-badge" id="wishes-badge" hidden></span></button>
+        </div>
+
+        <div id="sidebar-meals-panel">
+          <input type="text" id="meal-search" class="meal-search" placeholder="Filter meals..." autocomplete="off">
+          <div class="meal-list" id="meal-list">
+            <!-- Populated by JS: draggable meal cards -->
+          </div>
+        </div>
+
+        <div id="sidebar-wishes-panel" hidden>
+          <!-- Populated by renderWishesPanel() -->
         </div>
       </aside>
     </div>

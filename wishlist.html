@@ -1,0 +1,715 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>What do you want this week?</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    [hidden] { display: none !important; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f5f5f5;
+      color: #333;
+      min-height: 100vh;
+    }
+
+    /* ── Person picker ── */
+    #picker {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      gap: 1.5rem;
+      padding: 2rem;
+    }
+    #picker h1 {
+      font-size: 2rem;
+      font-weight: 700;
+      color: #1e293b;
+    }
+    .picker-buttons {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      width: 100%;
+      max-width: 320px;
+    }
+    .picker-btn {
+      padding: 1.25rem;
+      font-size: 1.4rem;
+      font-weight: 700;
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+      background: #6366f1;
+      color: #fff;
+      transition: background 0.15s, transform 0.1s;
+    }
+    .picker-btn:hover { background: #4f46e5; transform: translateY(-2px); }
+
+    /* ── App shell ── */
+    #wishlist-app {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+
+    .wl-header {
+      background: #fff;
+      border-bottom: 1px solid #e2e8f0;
+      padding: 0.75rem 1.25rem;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      flex-shrink: 0;
+    }
+    .wl-header h1 {
+      font-size: 1.2rem;
+      font-weight: 700;
+      color: #1e293b;
+    }
+    .wl-header-sub {
+      font-size: 0.8rem;
+      color: #64748b;
+    }
+
+    /* ── Two-column layout ── */
+    .wl-layout {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0;
+      flex: 1;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    /* ── Left column: meals ── */
+    .wl-meals {
+      background: #fff;
+      border-right: 1px solid #e2e8f0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .wl-col-header {
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #64748b;
+      padding: 0.75rem 1rem 0.4rem;
+      flex-shrink: 0;
+    }
+    .wl-search {
+      margin: 0 0.75rem 0.5rem;
+      padding: 0.35rem 0.6rem;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      outline: none;
+      flex-shrink: 0;
+    }
+    .wl-search:focus { border-color: #6366f1; }
+
+    .wl-meals-scroll {
+      overflow-y: auto;
+      flex: 1;
+      padding: 0 0.75rem 0.75rem;
+    }
+
+    .wl-section-label {
+      font-size: 0.65rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #94a3b8;
+      margin: 0.5rem 0 0.25rem;
+    }
+    .wl-section-label:first-child { margin-top: 0; }
+
+    /* ── Meal cards ── */
+    .wl-meal-card {
+      display: flex;
+      align-items: center;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 0.5rem 0.6rem;
+      cursor: grab;
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: #334155;
+      margin-bottom: 0.35rem;
+      user-select: none;
+      transition: box-shadow 0.15s;
+    }
+    .wl-meal-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+    .wl-meal-card.dragging { opacity: 0.4; cursor: grabbing; }
+    .wl-meal-card.in-picks {
+      opacity: 0.4;
+      cursor: default;
+    }
+
+    /* ── Right column: picks ── */
+    .wl-picks {
+      background: #f8fafc;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .wl-picks-scroll {
+      flex: 1;
+      overflow-y: auto;
+      padding: 0 0.75rem;
+    }
+
+    /* ── Picks drop zone ── */
+    #picks-zone {
+      min-height: 120px;
+      border: 2px dashed #c7d2fe;
+      border-radius: 8px;
+      padding: 0.5rem;
+      margin-bottom: 0.5rem;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    #picks-zone.drag-over {
+      border-color: #6366f1;
+      background: #eef2ff;
+    }
+    .picks-placeholder {
+      font-size: 0.78rem;
+      color: #94a3b8;
+      text-align: center;
+      padding: 1.5rem 0;
+      font-style: italic;
+    }
+    .pick-insert-line {
+      height: 2px;
+      background: #6366f1;
+      border-radius: 2px;
+      margin: 2px 0;
+    }
+
+    /* ── Pick cards ── */
+    .pick-card {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      background: #fff;
+      border: 1px solid #c7d2fe;
+      border-radius: 7px;
+      padding: 0.45rem 0.5rem;
+      margin-bottom: 0.35rem;
+      cursor: grab;
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: #334155;
+      user-select: none;
+      transition: box-shadow 0.15s;
+    }
+    .pick-card:hover { box-shadow: 0 2px 6px rgba(0,0,0,0.08); }
+    .pick-card.dragging { opacity: 0.4; cursor: grabbing; }
+    .pick-rank {
+      display: inline-block;
+      background: #e0e7ff;
+      color: #6366f1;
+      font-size: 0.65rem;
+      font-weight: 700;
+      border-radius: 4px;
+      padding: 1px 5px;
+      flex-shrink: 0;
+    }
+    .pick-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .pick-remove {
+      background: none;
+      border: none;
+      font-size: 1rem;
+      color: #94a3b8;
+      cursor: pointer;
+      padding: 0 2px;
+      line-height: 1;
+      flex-shrink: 0;
+    }
+    .pick-remove:hover { color: #ef4444; }
+
+    /* ── Notes + submit ── */
+    .wl-notes {
+      padding: 0 0.75rem 0.5rem;
+      flex-shrink: 0;
+    }
+    .wl-notes label {
+      font-size: 0.72rem;
+      color: #64748b;
+      display: block;
+      margin-bottom: 0.25rem;
+    }
+    .wl-notes textarea {
+      width: 100%;
+      padding: 0.4rem 0.5rem;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      font-family: inherit;
+      resize: none;
+      height: 52px;
+      outline: none;
+    }
+    .wl-notes textarea:focus { border-color: #6366f1; }
+
+    .wl-submit {
+      padding: 0 0.75rem 0.75rem;
+      flex-shrink: 0;
+    }
+    .wl-submit-btn {
+      width: 100%;
+      padding: 0.7rem;
+      background: #6366f1;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .wl-submit-btn:hover { background: #4f46e5; }
+    .wl-submit-btn:disabled { background: #94a3b8; cursor: default; }
+
+    /* ── Success state ── */
+    #success-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      gap: 1rem;
+      padding: 2rem;
+      text-align: center;
+    }
+    .success-emoji { font-size: 4rem; }
+    #success-state h2 { font-size: 1.8rem; font-weight: 700; color: #1e293b; }
+    #success-state p { font-size: 1rem; color: #64748b; }
+
+    /* ── Toast ── */
+    .wl-toast {
+      position: fixed;
+      bottom: 1.5rem;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #1e293b;
+      color: #fff;
+      padding: 0.6rem 1.25rem;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      font-weight: 500;
+      z-index: 200;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      animation: toast-in 0.25s ease-out;
+    }
+    @keyframes toast-in {
+      from { opacity: 0; transform: translateX(-50%) translateY(0.75rem); }
+      to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+    }
+
+    /* ── Loading ── */
+    .wl-loading {
+      font-size: 0.8rem;
+      color: #94a3b8;
+      font-style: italic;
+      text-align: center;
+      padding: 1.5rem 0;
+    }
+
+    /* ── Responsive: stack on small screens ── */
+    @media (max-width: 600px) {
+      .wl-layout { grid-template-columns: 1fr; grid-template-rows: 50vh 50vh; }
+      .wl-meals { border-right: none; border-bottom: 1px solid #e2e8f0; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ── Person picker ── -->
+  <div id="picker" hidden>
+    <h1>Who are you?</h1>
+    <div class="picker-buttons">
+      <button class="picker-btn" onclick="startWishlist('dylan')">Dyl-Boi</button>
+      <button class="picker-btn" onclick="startWishlist('zoe')">Zbutt</button>
+    </div>
+  </div>
+
+  <!-- ── Main wishlist UI ── -->
+  <div id="wishlist-app" hidden>
+    <header class="wl-header">
+      <h1 id="person-title"></h1>
+      <span class="wl-header-sub">Pick your meals for this week</span>
+    </header>
+
+    <div class="wl-layout">
+
+      <!-- Left: meal source list -->
+      <div class="wl-meals">
+        <div class="wl-col-header">Meals</div>
+        <input type="search" id="meal-search" class="wl-search" placeholder="Search meals..." autocomplete="off">
+        <div class="wl-meals-scroll">
+          <div id="meals-loading" class="wl-loading">Loading meals...</div>
+          <div id="favourites-section" hidden>
+            <div class="wl-section-label">Favourites</div>
+            <div id="favourites-list"></div>
+          </div>
+          <div id="all-meals-section">
+            <div class="wl-section-label">All Meals</div>
+            <div id="all-meals-list"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right: picks zone -->
+      <div class="wl-picks">
+        <div class="wl-col-header">My Picks <span style="color:#94a3b8;font-size:0.65rem;font-weight:400;text-transform:none;letter-spacing:0">(top = most wanted)</span></div>
+        <div class="wl-picks-scroll">
+          <div id="picks-zone">
+            <div class="picks-placeholder" id="picks-placeholder">Drag meals here</div>
+          </div>
+        </div>
+        <div class="wl-notes">
+          <label for="notes-input">Other stuff I want:</label>
+          <textarea id="notes-input" placeholder="J2O, fruit..."></textarea>
+        </div>
+        <div class="wl-submit">
+          <button class="wl-submit-btn" id="submit-btn" onclick="submitWishlist()">Send to Daddy</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── Success state ── -->
+  <div id="success-state" hidden>
+    <div class="success-emoji">&#127881;</div>
+    <h2>Sent to Daddy!</h2>
+    <p>Your picks have been saved.</p>
+  </div>
+
+  <script>
+    // ── State ──────────────────────────────────────
+    var person = '';        // 'dylan' | 'zoe'
+    var meals = [];         // all meals from /meals
+    var picks = [];         // ordered array of meal IDs
+    var mealSearchVal = '';
+
+    // Drag state
+    var dragSourceType = null;      // 'meals' | 'picks'
+    var draggingPickMealId = null;  // meal ID being dragged within picks
+
+    // ── Week ID (Friday-based, matches app.js getCustomWeekId with startDay='fri') ──
+    function getWeekId() {
+      var d = new Date();
+      var targetDay = 5; // Friday
+      var diff = d.getDay() - targetDay;
+      if (diff < 0) diff += 7;
+      d.setDate(d.getDate() - diff);
+      var y = d.getFullYear();
+      var m = String(d.getMonth() + 1).padStart(2, '0');
+      var day = String(d.getDate()).padStart(2, '0');
+      return y + '-' + m + '-' + day;
+    }
+
+    // ── Toast ──────────────────────────────────────
+    function showToast(msg) {
+      var t = document.querySelector('.wl-toast');
+      if (t) t.remove();
+      var el = document.createElement('div');
+      el.className = 'wl-toast';
+      el.textContent = msg;
+      document.body.appendChild(el);
+      setTimeout(function() { if (el.parentNode) el.remove(); }, 2500);
+    }
+
+    // ── Init ──────────────────────────────────────
+    (function init() {
+      var params = new URLSearchParams(window.location.search);
+      var forParam = params.get('for');
+      if (forParam === 'dylan' || forParam === 'zoe') {
+        startWishlist(forParam);
+      } else {
+        document.getElementById('picker').hidden = false;
+      }
+    })();
+
+    function startWishlist(p) {
+      person = p;
+      document.getElementById('picker').hidden = true;
+      document.getElementById('wishlist-app').hidden = false;
+      document.getElementById('person-title').textContent = p === 'dylan' ? 'Dyl-Boi' : 'Zbutt';
+      loadMeals();
+      setupPicksZone();
+    }
+
+    // ── Load meals from /meals ────────────────────
+    function loadMeals() {
+      fetch('/meals')
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          meals = data;
+          document.getElementById('meals-loading').hidden = true;
+          renderMeals();
+        })
+        .catch(function() {
+          document.getElementById('meals-loading').textContent = 'Could not load meals — please refresh.';
+        });
+    }
+
+    // ── Render meal source list ───────────────────
+    function renderMeals() {
+      var favKey = 'favourite_' + person; // 'favourite_dylan' or 'favourite_zoe'
+      var filter = mealSearchVal.toLowerCase();
+
+      var favMeals = meals.filter(function(m) { return m[favKey]; });
+      var otherMeals = meals.filter(function(m) { return !m[favKey]; });
+
+      // Favourites section
+      var favSection = document.getElementById('favourites-section');
+      var favList = document.getElementById('favourites-list');
+      favList.innerHTML = '';
+      if (favMeals.length > 0 && !filter) {
+        favSection.hidden = false;
+        favMeals.forEach(function(meal) {
+          favList.appendChild(createMealCard(meal));
+        });
+      } else {
+        favSection.hidden = true;
+      }
+
+      // All meals section (filtered)
+      var allList = document.getElementById('all-meals-list');
+      allList.innerHTML = '';
+      var shown = 0;
+      otherMeals.forEach(function(meal) {
+        if (filter && meal.name.toLowerCase().indexOf(filter) === -1) return;
+        allList.appendChild(createMealCard(meal));
+        shown++;
+      });
+      // If searching, also include matching favourites
+      if (filter) {
+        favMeals.forEach(function(meal) {
+          if (meal.name.toLowerCase().indexOf(filter) === -1) return;
+          allList.appendChild(createMealCard(meal));
+          shown++;
+        });
+      }
+      document.getElementById('all-meals-section').hidden = (shown === 0 && filter !== '');
+    }
+
+    function createMealCard(meal) {
+      var card = document.createElement('div');
+      card.className = 'wl-meal-card';
+      card.dataset.mealId = meal.id;
+      card.textContent = meal.name;
+
+      if (picks.indexOf(meal.id) !== -1) {
+        card.classList.add('in-picks');
+        // Not draggable when already picked
+      } else {
+        card.draggable = true;
+        card.addEventListener('dragstart', function(e) {
+          dragSourceType = 'meals';
+          draggingPickMealId = null;
+          e.dataTransfer.setData('text/plain', meal.id);
+          e.dataTransfer.effectAllowed = 'copy';
+          card.classList.add('dragging');
+        });
+        card.addEventListener('dragend', function() {
+          card.classList.remove('dragging');
+        });
+      }
+
+      return card;
+    }
+
+    // ── Picks zone setup ──────────────────────────
+    function setupPicksZone() {
+      var zone = document.getElementById('picks-zone');
+
+      zone.addEventListener('dragover', function(e) {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = dragSourceType === 'picks' ? 'move' : 'copy';
+        zone.classList.add('drag-over');
+        updateInsertIndicator(e.clientY);
+      });
+
+      zone.addEventListener('dragleave', function(e) {
+        if (!zone.contains(e.relatedTarget)) {
+          zone.classList.remove('drag-over');
+          removeInsertIndicator();
+        }
+      });
+
+      zone.addEventListener('drop', function(e) {
+        e.preventDefault();
+        zone.classList.remove('drag-over');
+        removeInsertIndicator();
+
+        var mealId = e.dataTransfer.getData('text/plain');
+
+        if (dragSourceType === 'meals') {
+          if (picks.indexOf(mealId) === -1) {
+            var insertIdx = getInsertIndex(e.clientY);
+            picks.splice(insertIdx, 0, mealId);
+            renderPicks();
+            renderMeals();
+          }
+        } else if (dragSourceType === 'picks' && draggingPickMealId) {
+          var fromIdx = picks.indexOf(draggingPickMealId);
+          var toIdx = getInsertIndex(e.clientY);
+          if (fromIdx !== -1) {
+            picks.splice(fromIdx, 1);
+            if (fromIdx < toIdx) toIdx--;
+            picks.splice(toIdx, 0, draggingPickMealId);
+            renderPicks();
+          }
+        }
+
+        dragSourceType = null;
+        draggingPickMealId = null;
+      });
+    }
+
+    function getInsertIndex(clientY) {
+      var zone = document.getElementById('picks-zone');
+      var cards = zone.querySelectorAll('.pick-card');
+      for (var i = 0; i < cards.length; i++) {
+        var rect = cards[i].getBoundingClientRect();
+        if (clientY < rect.top + rect.height / 2) return i;
+      }
+      return picks.length;
+    }
+
+    var _insertLine = null;
+    function updateInsertIndicator(clientY) {
+      var zone = document.getElementById('picks-zone');
+      removeInsertIndicator();
+      var insertIdx = getInsertIndex(clientY);
+      var cards = zone.querySelectorAll('.pick-card');
+      var line = document.createElement('div');
+      line.className = 'pick-insert-line';
+      _insertLine = line;
+      if (insertIdx < cards.length) {
+        zone.insertBefore(line, cards[insertIdx]);
+      } else {
+        zone.appendChild(line);
+      }
+    }
+
+    function removeInsertIndicator() {
+      if (_insertLine && _insertLine.parentNode) {
+        _insertLine.parentNode.removeChild(_insertLine);
+      }
+      _insertLine = null;
+    }
+
+    // ── Render picks ──────────────────────────────
+    function renderPicks() {
+      var zone = document.getElementById('picks-zone');
+      zone.innerHTML = '';
+
+      if (picks.length === 0) {
+        var ph = document.createElement('div');
+        ph.className = 'picks-placeholder';
+        ph.id = 'picks-placeholder';
+        ph.textContent = 'Drag meals here';
+        zone.appendChild(ph);
+        return;
+      }
+
+      picks.forEach(function(mealId, idx) {
+        var meal = null;
+        for (var i = 0; i < meals.length; i++) {
+          if (meals[i].id === mealId) { meal = meals[i]; break; }
+        }
+        if (!meal) return;
+
+        var card = document.createElement('div');
+        card.className = 'pick-card';
+        card.dataset.mealId = mealId;
+        card.draggable = true;
+
+        var rankEl = document.createElement('span');
+        rankEl.className = 'pick-rank';
+        rankEl.textContent = idx + 1;
+        card.appendChild(rankEl);
+
+        var nameEl = document.createElement('span');
+        nameEl.className = 'pick-name';
+        nameEl.textContent = meal.name;
+        card.appendChild(nameEl);
+
+        var removeBtn = document.createElement('button');
+        removeBtn.className = 'pick-remove';
+        removeBtn.textContent = '\u00d7';
+        removeBtn.title = 'Remove';
+        (function(id) {
+          removeBtn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            picks = picks.filter(function(p) { return p !== id; });
+            renderPicks();
+            renderMeals();
+          });
+        })(mealId);
+        card.appendChild(removeBtn);
+
+        (function(id) {
+          card.addEventListener('dragstart', function(e) {
+            dragSourceType = 'picks';
+            draggingPickMealId = id;
+            e.dataTransfer.setData('text/plain', id);
+            e.dataTransfer.effectAllowed = 'move';
+            card.classList.add('dragging');
+          });
+          card.addEventListener('dragend', function() {
+            card.classList.remove('dragging');
+          });
+        })(mealId);
+
+        zone.appendChild(card);
+      });
+    }
+
+    // ── Submit ────────────────────────────────────
+    function submitWishlist() {
+      var btn = document.getElementById('submit-btn');
+      btn.disabled = true;
+      btn.textContent = 'Sending...';
+
+      var notes = document.getElementById('notes-input').value.trim();
+      var weekId = getWeekId();
+
+      fetch('/wishlist/' + person, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ picks: picks, notes: notes, week_id: weekId })
+      })
+        .then(function(r) {
+          if (!r.ok) throw new Error('Server error ' + r.status);
+          document.getElementById('wishlist-app').hidden = true;
+          document.getElementById('success-state').hidden = false;
+        })
+        .catch(function() {
+          btn.disabled = false;
+          btn.textContent = 'Send to Daddy';
+          showToast('Something went wrong \u2014 try again');
+        });
+    }
+
+    // ── Search ────────────────────────────────────
+    document.getElementById('meal-search').addEventListener('input', function() {
+      mealSearchVal = this.value;
+      renderMeals();
+    });
+  </script>
+</body>
+</html>
