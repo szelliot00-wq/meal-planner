@@ -3,6 +3,9 @@
    Stacked single-page layout with meals sidebar on RHS
    ============================================== */
 
+/* Ensure [hidden] always hides regardless of explicit display in author stylesheet (Safari bug) */
+[hidden] { display: none !important; }
+
 /* ── Reset and base ── */
 * {
   margin: 0;
