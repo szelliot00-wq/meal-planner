@@ -116,6 +116,22 @@ When a recipe is approved on the server, `recipes_version` in `plan.json` is inc
 | `mealPlannerLocked` | `'1'` if week is locked, else `'0'` |
 | `mealPlannerLockedWeekId` | Week ID that was locked (e.g. `'2026-03-07'`) |
 
+## Kids wishlist
+
+Kids submit ranked meal picks at `/app/wishlist`. Daddy sees them in the **Wishes** sidebar tab with a badge count, and can drag picks directly into the meal grid.
+
+- `/app/wishlist` — person picker (Dyl-Boi / Zbutt)
+- `/app/wishlist?for=dylan` or `?for=zoe` — skips picker, straight to wishlist
+- Daddy uses "Copy Dyl-Boi link" / "Copy Zbutt link" buttons in the Wishes tab and pastes into WhatsApp manually
+- Wishlist stored in `wishlist.json` on the server (not committed)
+- Resets when week rolls over (Friday-based week ID); re-submitting overwrites only that kid's entry
+- `GET /wishlists` — returns current week's submissions
+- `POST /wishlist/{person}` — body: `{ picks: [mealIds], notes: string, week_id: string }`
+- `GET /meals` — returns all recipes for the wishlist page (service account, no browser API key, 5-min cache)
+
+## Gotchas
+- **Safari `[hidden]` bug**: browsers where author-stylesheet `display` overrides `[hidden]` (e.g. older iOS Safari). Fixed with `[hidden] { display: none !important; }` at top of `styles.css` and inside `wishlist.html`. Do not remove this rule.
+
 ## Rules
 - Keep things simple. No unnecessary libraries or frameworks.
 - All logic goes in `app.js`, all styles in `styles.css`.
