@@ -1104,6 +1104,33 @@ function updateWishesBadge() {
 /**
  * Render share-link copy buttons (Daddy only).
  */
+function copyText(text, successMsg) {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text)
+      .then(function() { showToast(successMsg); })
+      .catch(function() { copyTextFallback(text, successMsg); });
+  } else {
+    copyTextFallback(text, successMsg);
+  }
+}
+
+function copyTextFallback(text, successMsg) {
+  var ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed';
+  ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.focus();
+  ta.select();
+  try {
+    document.execCommand('copy');
+    showToast(successMsg);
+  } catch (e) {
+    showToast('Could not copy link');
+  }
+  document.body.removeChild(ta);
+}
+
 function renderShareLinks(panel) {
   var div = document.createElement('div');
   div.className = 'share-links';
@@ -1112,10 +1139,7 @@ function renderShareLinks(panel) {
   btnDylan.className = 'btn-copy-link';
   btnDylan.textContent = 'Copy Dyl-Boi link';
   btnDylan.addEventListener('click', function() {
-    var url = window.location.origin + '/app/wishlist?for=dylan';
-    navigator.clipboard.writeText(url)
-      .then(function() { showToast('Dyl-Boi link copied!'); })
-      .catch(function() { showToast('Could not copy link'); });
+    copyText(window.location.origin + '/app/wishlist?for=dylan', 'Dyl-Boi link copied!');
   });
   div.appendChild(btnDylan);
 
@@ -1123,10 +1147,7 @@ function renderShareLinks(panel) {
   btnZoe.className = 'btn-copy-link';
   btnZoe.textContent = 'Copy Zbutt link';
   btnZoe.addEventListener('click', function() {
-    var url = window.location.origin + '/app/wishlist?for=zoe';
-    navigator.clipboard.writeText(url)
-      .then(function() { showToast('Zbutt link copied!'); })
-      .catch(function() { showToast('Could not copy link'); });
+    copyText(window.location.origin + '/app/wishlist?for=zoe', 'Zbutt link copied!');
   });
   div.appendChild(btnZoe);
 
