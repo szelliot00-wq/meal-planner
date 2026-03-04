@@ -129,6 +129,15 @@ Kids submit ranked meal picks at `/app/wishlist`. Daddy sees them in the **Wishe
 - `POST /wishlist/{person}` — body: `{ picks: [mealIds], notes: string, week_id: string }`
 - `GET /meals` — returns all recipes for the wishlist page (service account, no browser API key, 5-min cache)
 
+## Weekly wishlist emails
+Every Wednesday at 14:00 the pipeline server sends a personalised email to each kid with their wishlist link, CC'd to Daddy. Runs as a background thread in `main.py` — no separate script or launchd agent.
+
+- **Dylan**: dmasterw7@gmail.com → `/app/wishlist?for=dylan`
+- **Zoe**: zmasterw5@gmail.com → `/app/wishlist?for=zoe`
+- **From**: Daddy (szelliot00@gmail.com)
+- Requires `GMAIL_FROM` and `GMAIL_APP_PASSWORD` in `.env` on MacBook Pro
+- `MEAL_PLANNER_BASE_URL` defaults to `http://192.168.1.40:8090`
+
 ## Gotchas
 - **Safari `[hidden]` bug**: browsers where author-stylesheet `display` overrides `[hidden]` (e.g. older iOS Safari). Fixed with `[hidden] { display: none !important; }` at top of `styles.css` and inside `wishlist.html`. Do not remove this rule.
 
