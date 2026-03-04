@@ -152,7 +152,7 @@ var weekLocked = false;
 var lockedWeekId = '';
 
 // Which sidebar tab is active
-var sidebarTab = 'meals'; // 'meals' | 'wishes'
+var sidebarTab = 'meals'; // 'meals' | 'wishes' | 'tescos'
 
 // Last fetched wishlist data { week_id, submissions }
 var wishlistData = null;
@@ -1089,7 +1089,9 @@ function fetchWishlists() {
     .then(function(data) {
       wishlistData = data;
       updateWishesBadge();
+      updateTescosBadge();
       if (sidebarTab === 'wishes') renderWishesPanel();
+      if (sidebarTab === 'tescos') renderTescosPanel();
     })
     .catch(function() {});
 }
@@ -1171,7 +1173,9 @@ function renderShareLinks(panel) {
       .then(function() {
         wishlistData = { week_id: '', submissions: {} };
         updateWishesBadge();
+        updateTescosBadge();
         renderWishesPanel();
+        renderTescosPanel();
         showToast('Wishlists cleared');
       })
       .catch(function() { showToast('Could not clear wishlists'); });
@@ -1236,13 +1240,6 @@ function renderWishesPanel() {
       panel.appendChild(noPicks);
     }
 
-    if (sub.notes) {
-      var notes = document.createElement('div');
-      notes.className = 'wishes-notes';
-      notes.textContent = '\u201c' + sub.notes + '\u201d';
-      panel.appendChild(notes);
-    }
-
     if (sub.submitted_at) {
       var ts = document.createElement('div');
       ts.className = 'wishes-submitted-at';
@@ -1254,6 +1251,81 @@ function renderWishesPanel() {
   });
 }
 
+
+/**
+ * Parse a notes string into individual items (split by comma, trimmed, non-empty).
+ */
+function parseTescosItems(notes) {
+  if (!notes) return [];
+  return notes.split(',').map(function(s) { return s.trim(); }).filter(function(s) { return s.length > 0; });
+}
+
+/**
+ * Update the Tescos tab badge with total item count across all kids' notes.
+ */
+function updateTescosBadge() {
+  var badge = document.getElementById('tescos-badge');
+  if (!badge) return;
+  var count = 0;
+  if (wishlistData && wishlistData.submissions) {
+    ['dylan', 'zoe'].forEach(function(p) {
+      var sub = wishlistData.submissions[p];
+      if (sub) count += parseTescosItems(sub.notes).length;
+    });
+  }
+  if (count > 0) {
+    badge.textContent = count;
+    badge.hidden = false;
+  } else {
+    badge.hidden = true;
+  }
+}
+
+/**
+ * Render the Tescos panel with kids' free-text requests.
+ */
+function renderTescosPanel() {
+  var panel = document.getElementById('sidebar-tescos-panel');
+  if (!panel) return;
+  panel.innerHTML = '';
+
+  var allItems = [];
+  ['dylan', 'zoe'].forEach(function(p) {
+    var sub = wishlistData && wishlistData.submissions && wishlistData.submissions[p];
+    var items = parseTescosItems(sub && sub.notes);
+    if (items.length === 0) return;
+
+    var header = document.createElement('div');
+    header.className = 'wishes-section-header';
+    header.textContent = PEOPLE_LABELS[p];
+    panel.appendChild(header);
+
+    items.forEach(function(item) {
+      var row = document.createElement('div');
+      row.className = 'tescos-item';
+      row.textContent = item;
+      panel.appendChild(row);
+      allItems.push(item);
+    });
+  });
+
+  if (allItems.length === 0) {
+    var empty = document.createElement('div');
+    empty.className = 'wishes-empty';
+    empty.textContent = 'No extra requests yet.';
+    panel.appendChild(empty);
+    return;
+  }
+
+  var copyBtn = document.createElement('button');
+  copyBtn.className = 'btn-copy-link';
+  copyBtn.textContent = 'Copy all';
+  copyBtn.style.marginTop = '0.75rem';
+  copyBtn.addEventListener('click', function() {
+    copyText(allItems.join('\n'), 'Copied ' + allItems.length + ' items!');
+  });
+  panel.appendChild(copyBtn);
+}
 
 /**
  * Show or hide the lock button (Daddy only) and the locked banner (Zoe/Dylan when locked).
@@ -1862,22 +1934,30 @@ document.getElementById('start-day-select').addEventListener('change', function(
 });
 
 // Sidebar tab switching
+function switchSidebarTab(tab) {
+  sidebarTab = tab;
+  document.getElementById('tab-meals').classList.toggle('sidebar-tab--active', tab === 'meals');
+  document.getElementById('tab-wishes').classList.toggle('sidebar-tab--active', tab === 'wishes');
+  document.getElementById('tab-tescos').classList.toggle('sidebar-tab--active', tab === 'tescos');
+  document.getElementById('sidebar-meals-panel').hidden = tab !== 'meals';
+  document.getElementById('sidebar-wishes-panel').hidden = tab !== 'wishes';
+  document.getElementById('sidebar-tescos-panel').hidden = tab !== 'tescos';
+}
+
 document.getElementById('tab-meals').addEventListener('click', function() {
-  sidebarTab = 'meals';
-  document.getElementById('tab-meals').classList.add('sidebar-tab--active');
-  document.getElementById('tab-wishes').classList.remove('sidebar-tab--active');
-  document.getElementById('sidebar-meals-panel').hidden = false;
-  document.getElementById('sidebar-wishes-panel').hidden = true;
+  switchSidebarTab('meals');
 });
 
 document.getElementById('tab-wishes').addEventListener('click', function() {
-  sidebarTab = 'wishes';
-  document.getElementById('tab-wishes').classList.add('sidebar-tab--active');
-  document.getElementById('tab-meals').classList.remove('sidebar-tab--active');
-  document.getElementById('sidebar-meals-panel').hidden = true;
-  document.getElementById('sidebar-wishes-panel').hidden = false;
+  switchSidebarTab('wishes');
   fetchWishlists();
   renderWishesPanel();
+});
+
+document.getElementById('tab-tescos').addEventListener('click', function() {
+  switchSidebarTab('tescos');
+  fetchWishlists();
+  renderTescosPanel();
 });
 
 
