@@ -1209,10 +1209,7 @@ function renderWishesPanel() {
   ['dylan', 'zoe'].forEach(function(person) {
     var sub = wishlistData.submissions[person];
 
-    var header = document.createElement('div');
-    header.className = 'wishes-section-header';
-    header.textContent = PEOPLE_LABELS[person];
-    panel.appendChild(header);
+    panel.appendChild(makeSectionHeader(person));
 
     if (!sub) {
       var noSub = document.createElement('div');
@@ -1251,6 +1248,44 @@ function renderWishesPanel() {
   });
 }
 
+
+/**
+ * Clear a single person's wishlist submission and re-render both panels + badges.
+ */
+function clearPersonWishlist(person) {
+  fetch(API_BASE + '/wishlists/' + person, { method: 'DELETE' })
+    .then(function() {
+      if (wishlistData && wishlistData.submissions) {
+        delete wishlistData.submissions[person];
+      }
+      updateWishesBadge();
+      updateTescosBadge();
+      renderWishesPanel();
+      renderTescosPanel();
+    })
+    .catch(function() { showToast('Could not clear'); });
+}
+
+/**
+ * Build a section header row with a person label and inline clear button.
+ */
+function makeSectionHeader(person) {
+  var row = document.createElement('div');
+  row.className = 'wishes-section-header-row';
+  var label = document.createElement('span');
+  label.className = 'wishes-section-header';
+  label.style.margin = '0';
+  label.textContent = PEOPLE_LABELS[person];
+  row.appendChild(label);
+  var btn = document.createElement('button');
+  btn.className = 'btn-clear-person';
+  btn.textContent = 'Clear';
+  (function(p) {
+    btn.addEventListener('click', function() { clearPersonWishlist(p); });
+  })(person);
+  row.appendChild(btn);
+  return row;
+}
 
 /**
  * Parse a notes string into individual items (split by comma, trimmed, non-empty).
@@ -1295,10 +1330,7 @@ function renderTescosPanel() {
     var items = parseTescosItems(sub && sub.notes);
     if (items.length === 0) return;
 
-    var header = document.createElement('div');
-    header.className = 'wishes-section-header';
-    header.textContent = PEOPLE_LABELS[p];
-    panel.appendChild(header);
+    panel.appendChild(makeSectionHeader(p));
 
     items.forEach(function(item) {
       var row = document.createElement('div');

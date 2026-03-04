@@ -1025,6 +1025,25 @@ body {
   font-size: 0.65rem;
   color: #94a3b8;
 }
+.wishes-section-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0.6rem 0 0.3rem;
+}
+.wishes-section-header-row:first-child { margin-top: 0; }
+.btn-clear-person {
+  font-size: 0.62rem;
+  font-weight: 600;
+  color: #ef4444;
+  background: none;
+  border: 1px solid #fecaca;
+  border-radius: 4px;
+  padding: 1px 6px;
+  cursor: pointer;
+  line-height: 1.4;
+}
+.btn-clear-person:hover { background: #fef2f2; }
 .tescos-item {
   font-size: 0.82rem;
   font-weight: 500;
