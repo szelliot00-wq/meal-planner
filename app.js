@@ -250,8 +250,18 @@ function getCustomWeekId(date) {
  * When the week is locked and the current user is not Daddy,
  * returns a date 7 days in the future (next week).
  */
+/**
+ * Returns true if the current user should be viewing/editing next week's plan.
+ * Daddy always plans ahead for next week.
+ * Zoe/Dylan see next week only when the week is locked.
+ */
+function isOnNextWeek() {
+  if (currentUser === 'steve') return true;
+  return weekLocked && !!currentUser && currentUser !== 'steve';
+}
+
 function getViewDate() {
-  if (weekLocked && currentUser && currentUser !== 'steve') {
+  if (isOnNextWeek()) {
     var d = new Date();
     d.setDate(d.getDate() + 7);
     return d;
@@ -357,7 +367,7 @@ function loadStartDay() {
  * When the week is locked and the user is not Daddy, saves to the next-week store.
  */
 function savePlan() {
-  var isNextWeek = weekLocked && currentUser && currentUser !== 'steve';
+  var isNextWeek = isOnNextWeek();
   var viewDate = getViewDate();
   var weekId = getCustomWeekId(viewDate);
   var entry = {
@@ -446,7 +456,7 @@ function migratePlan(plan) {
  * Otherwise loads the current week. Migrates old single-string slot format to arrays.
  */
 function loadOnStartup() {
-  if (weekLocked && currentUser && currentUser !== 'steve') {
+  if (isOnNextWeek()) {
     try {
       var nextData = JSON.parse(localStorage.getItem('mealPlannerNext'));
       if (nextData && nextData.plan) {
@@ -537,7 +547,7 @@ function syncFromServer() {
 
         // Apply any change in lock state
         if (serverLocked !== weekLocked || serverLockedWeekId !== lockedWeekId) {
-          var wasViewingNextWeek = weekLocked && currentUser && currentUser !== 'steve';
+          var wasViewingNextWeek = isOnNextWeek();
           weekLocked = serverLocked;
           lockedWeekId = serverLockedWeekId;
           try { localStorage.setItem('mealPlannerLocked', weekLocked ? '1' : '0'); } catch (e) {}
@@ -545,7 +555,7 @@ function syncFromServer() {
           renderLockControls();
           updateWeekLabel();
 
-          var nowViewingNextWeek = weekLocked && currentUser && currentUser !== 'steve';
+          var nowViewingNextWeek = isOnNextWeek();
           if (nowViewingNextWeek && !wasViewingNextWeek) {
             // Just became locked — switch to next week plan
             var nextPlan = (data.next && data.next.plan)
@@ -568,7 +578,7 @@ function syncFromServer() {
       }
 
       // Sync the appropriate plan
-      var isViewingNextWeek = weekLocked && currentUser && currentUser !== 'steve';
+      var isViewingNextWeek = isOnNextWeek();
       if (isViewingNextWeek) {
         if (!data.next) return;
         var incomingNext = JSON.stringify(data.next.plan || {});
