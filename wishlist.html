@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>What do you want this week?</title>
+  <title>What do you want next week?</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     [hidden] { display: none !important; }
@@ -152,6 +152,19 @@
       opacity: 0.4;
       cursor: default;
     }
+    .wl-fav-btn {
+      background: none;
+      border: none;
+      font-size: 1rem;
+      line-height: 1;
+      cursor: pointer;
+      padding: 0 2px;
+      flex-shrink: 0;
+      opacity: 0.35;
+      transition: opacity 0.15s, transform 0.1s;
+    }
+    .wl-fav-btn.is-fav { opacity: 1; }
+    .wl-fav-btn:hover { opacity: 0.75; transform: scale(1.2); }
 
     /* ── Right column: picks ── */
     .wl-picks {
@@ -346,7 +359,7 @@
   <div id="wishlist-app" hidden>
     <header class="wl-header">
       <h1 id="person-title"></h1>
-      <span class="wl-header-sub">Pick your meals for this week</span>
+      <span class="wl-header-sub">Pick your meals for next week</span>
     </header>
 
     <div class="wl-layout">
@@ -464,6 +477,24 @@
         });
     }
 
+    // ── Toggle favourite ──────────────────────────
+    function toggleFavourite(mealId) {
+      var meal = null;
+      for (var i = 0; i < meals.length; i++) {
+        if (meals[i].id === mealId) { meal = meals[i]; break; }
+      }
+      if (!meal) return;
+      var favKey = 'favourite_' + person;
+      var newVal = !meal[favKey];
+      meal[favKey] = newVal;
+      fetch('/favourite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ recipe_id: mealId, person: person, actor: person, value: newVal })
+      }).catch(function() {});
+      renderMeals();
+    }
+
     // ── Render meal source list ───────────────────
     function renderMeals() {
       var favKey = 'favourite_' + person; // 'favourite_dylan' or 'favourite_zoe'
@@ -509,11 +540,29 @@
       var card = document.createElement('div');
       card.className = 'wl-meal-card';
       card.dataset.mealId = meal.id;
-      card.textContent = meal.name;
+
+      var favKey = 'favourite_' + person;
+      var isFav = !!meal[favKey];
+
+      var starBtn = document.createElement('button');
+      starBtn.className = 'wl-fav-btn' + (isFav ? ' is-fav' : '');
+      starBtn.textContent = '\u2605';
+      starBtn.title = isFav ? 'Remove favourite' : 'Add favourite';
+      (function(id) {
+        starBtn.addEventListener('click', function(e) {
+          e.stopPropagation();
+          toggleFavourite(id);
+        });
+      })(meal.id);
+      card.appendChild(starBtn);
+
+      var nameEl = document.createElement('span');
+      nameEl.style.flex = '1';
+      nameEl.textContent = meal.name;
+      card.appendChild(nameEl);
 
       if (picks.indexOf(meal.id) !== -1) {
         card.classList.add('in-picks');
-        // Not draggable when already picked
       } else {
         card.draggable = true;
         card.addEventListener('dragstart', function(e) {
