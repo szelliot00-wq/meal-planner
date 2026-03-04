@@ -1151,6 +1151,23 @@ function renderShareLinks(panel) {
   });
   div.appendChild(btnZoe);
 
+  var btnClear = document.createElement('button');
+  btnClear.className = 'btn-copy-link';
+  btnClear.textContent = 'Clear all wishlists';
+  btnClear.style.color = '#ef4444';
+  btnClear.addEventListener('click', function() {
+    if (!confirm('Clear all wishlist submissions?')) return;
+    fetch(API_BASE + '/wishlists', { method: 'DELETE' })
+      .then(function() {
+        wishlistData = { week_id: '', submissions: {} };
+        updateWishesBadge();
+        renderWishesPanel();
+        showToast('Wishlists cleared');
+      })
+      .catch(function() { showToast('Could not clear wishlists'); });
+  });
+  div.appendChild(btnClear);
+
   panel.appendChild(div);
 }
 
