@@ -337,6 +337,32 @@
       padding: 1.5rem 0;
     }
 
+    /* ── Custom meal add ── */
+    .wl-custom-add {
+      padding: 0.5rem 0.75rem 0.75rem;
+      border-top: 1px solid #e2e8f0;
+      flex-shrink: 0;
+    }
+    .wl-custom-row {
+      display: flex;
+      gap: 0.4rem;
+      align-items: center;
+    }
+    .wl-add-custom-btn {
+      padding: 0.35rem 0.6rem;
+      background: #6366f1;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      cursor: pointer;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .wl-add-custom-btn:hover { background: #4f46e5; }
+    .pick-card.custom-pick { border-color: #fde68a; background: #fffbeb; }
+
     /* ── Responsive: stack on small screens ── */
     @media (max-width: 600px) {
       .wl-layout { grid-template-columns: 1fr; grid-template-rows: 50vh 50vh; }
@@ -379,6 +405,13 @@
             <div id="all-meals-list"></div>
           </div>
         </div>
+        <div class="wl-custom-add">
+          <div class="wl-section-label" style="padding:0 0 0.3rem">Not on the list?</div>
+          <div class="wl-custom-row">
+            <input type="text" id="custom-meal-input" class="wl-search" style="margin:0;flex:1" placeholder="e.g. Mum's pasta bake...">
+            <button class="wl-add-custom-btn" onclick="addCustomPick()">+ Add</button>
+          </div>
+        </div>
       </div>
 
       <!-- Right: picks zone -->
@@ -390,8 +423,12 @@
           </div>
         </div>
         <div class="wl-notes">
-          <label for="notes-input">Other stuff I want:</label>
-          <textarea id="notes-input" placeholder="J2O, fruit..."></textarea>
+          <label for="breakfast-input">Breakfast:</label>
+          <textarea id="breakfast-input" placeholder="e.g. pancakes, cereal, fry-up..."></textarea>
+        </div>
+        <div class="wl-notes">
+          <label for="notes-input">Tesco extras:</label>
+          <textarea id="notes-input" placeholder="J2O, shampoo..."></textarea>
         </div>
         <div class="wl-submit">
           <button class="wl-submit-btn" id="submit-btn" onclick="submitWishlist()">Send to Daddy</button>
@@ -413,6 +450,7 @@
     var person = '';        // 'dylan' | 'zoe'
     var meals = [];         // all meals from /meals
     var picks = [];         // ordered array of meal IDs
+    var customPicks = [];   // free-text meal names typed by kid
     var mealSearchVal = '';
 
     // Drag state
@@ -494,6 +532,23 @@
       }).catch(function() {});
       renderMeals();
     }
+
+    // ── Add custom pick ───────────────────────────
+    function addCustomPick() {
+      var input = document.getElementById('custom-meal-input');
+      var val = input.value.trim();
+      if (!val) return;
+      customPicks.push(val);
+      input.value = '';
+      renderPicks();
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+      var inp = document.getElementById('custom-meal-input');
+      if (inp) inp.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') { e.preventDefault(); addCustomPick(); }
+      });
+    });
 
     // ── Render meal source list ───────────────────
     function renderMeals() {
@@ -666,7 +721,7 @@
       var zone = document.getElementById('picks-zone');
       zone.innerHTML = '';
 
-      if (picks.length === 0) {
+      if (picks.length === 0 && customPicks.length === 0) {
         var ph = document.createElement('div');
         ph.className = 'picks-placeholder';
         ph.id = 'picks-placeholder';
@@ -726,6 +781,37 @@
 
         zone.appendChild(card);
       });
+
+      // Custom (free-text) picks after regular ones
+      customPicks.forEach(function(name, idx) {
+        var card = document.createElement('div');
+        card.className = 'pick-card custom-pick';
+
+        var rankEl = document.createElement('span');
+        rankEl.className = 'pick-rank';
+        rankEl.textContent = picks.length + idx + 1;
+        card.appendChild(rankEl);
+
+        var nameEl = document.createElement('span');
+        nameEl.className = 'pick-name';
+        nameEl.textContent = name;
+        card.appendChild(nameEl);
+
+        var removeBtn = document.createElement('button');
+        removeBtn.className = 'pick-remove';
+        removeBtn.textContent = '\u00d7';
+        removeBtn.title = 'Remove';
+        (function(i) {
+          removeBtn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            customPicks.splice(i, 1);
+            renderPicks();
+          });
+        })(idx);
+        card.appendChild(removeBtn);
+
+        zone.appendChild(card);
+      });
     }
 
     // ── Submit ────────────────────────────────────
@@ -735,12 +821,13 @@
       btn.textContent = 'Sending...';
 
       var notes = document.getElementById('notes-input').value.trim();
+      var breakfast = document.getElementById('breakfast-input').value.trim();
       var weekId = getWeekId();
 
       fetch('/wishlist/' + person, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ picks: picks, notes: notes, week_id: weekId })
+        body: JSON.stringify({ picks: picks, custom_picks: customPicks, breakfast: breakfast, notes: notes, week_id: weekId })
       })
         .then(function(r) {
           if (!r.ok) throw new Error('Server error ' + r.status);

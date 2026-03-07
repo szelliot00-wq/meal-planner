@@ -1219,22 +1219,53 @@ function renderWishesPanel() {
       return;
     }
 
+    var rankCounter = 0;
     if (sub.picks && sub.picks.length > 0) {
-      sub.picks.forEach(function(mealId, idx) {
+      sub.picks.forEach(function(mealId) {
         var meal = findMeal(mealId);
         if (!meal) return;
+        rankCounter++;
         appendMealCard(panel, meal);
         var card = panel.lastElementChild;
         var rankSpan = document.createElement('span');
         rankSpan.className = 'wish-rank';
-        rankSpan.textContent = idx + 1;
+        rankSpan.textContent = rankCounter;
         card.insertBefore(rankSpan, card.firstChild);
       });
-    } else {
+    }
+
+    if (sub.custom_picks && sub.custom_picks.length > 0) {
+      sub.custom_picks.forEach(function(name) {
+        rankCounter++;
+        var row = document.createElement('div');
+        row.className = 'wishes-custom-pick';
+        var rankSpan = document.createElement('span');
+        rankSpan.className = 'wish-rank';
+        rankSpan.textContent = rankCounter;
+        row.appendChild(rankSpan);
+        var nameEl = document.createElement('span');
+        nameEl.textContent = name;
+        row.appendChild(nameEl);
+        panel.appendChild(row);
+      });
+    }
+
+    if (rankCounter === 0) {
       var noPicks = document.createElement('div');
       noPicks.className = 'wishes-empty';
       noPicks.textContent = 'No meals picked.';
       panel.appendChild(noPicks);
+    }
+
+    if (sub.breakfast) {
+      var bfLabel = document.createElement('div');
+      bfLabel.className = 'wishes-section-label-sm';
+      bfLabel.textContent = 'Breakfast';
+      panel.appendChild(bfLabel);
+      var bfVal = document.createElement('div');
+      bfVal.className = 'wishes-notes';
+      bfVal.textContent = sub.breakfast;
+      panel.appendChild(bfVal);
     }
 
     if (sub.submitted_at) {
