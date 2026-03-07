@@ -526,7 +526,8 @@ function syncFromServer() {
             savedAt: new Date().toISOString(),
             plan: promotedPlan
           };
-          currentPlan = promotedPlan;
+          // Steve always views next week — after rollover he gets a blank new week
+          currentPlan = (currentUser === 'steve') ? createEmptyPlan() : promotedPlan;
           try { localStorage.setItem('mealPlannerCurrent', JSON.stringify(promotedEntry)); } catch (e) {}
           try { localStorage.removeItem('mealPlannerNext'); } catch (e) {}
           weekLocked = false;
