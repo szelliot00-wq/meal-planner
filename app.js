@@ -133,8 +133,17 @@ var MEALS = [];
 // The current week's meal assignments: { "mon-lunch-steve": "omelette", ... }
 var currentPlan = {};
 
-// Free-form notes per slot — Daddy only: { "mon-lunch-steve": "Out" }
+/// Free-form notes per slot — Daddy only: { "mon-lunch-steve": "Out" }
 var currentPlanNotes = {};
+
+// The effective week ID for the currently displayed plan.
+// May differ from getCustomWeekId(new Date()) on the last day of the week
+// when data was already planned ahead for next week.
+var effectiveWeekId = null;
+
+// Set to true when the plan was loaded from mealPlannerNext (legacy recovery).
+// syncFromServer will push local data to server instead of pulling.
+var recoveredFromNext = false;
 
 // Which day the week starts on (configurable, default Friday)
 var startDay = 'fri';
@@ -345,10 +354,16 @@ function loadStartDay() {
  * Save the current plan to history. Called automatically on every change.
  */
 function savePlan() {
-  var weekId = getCustomWeekId(new Date());
+  var computedWeekId = getCustomWeekId(new Date());
+  // Use effectiveWeekId if it's the same or in the future (e.g. plan loaded
+  // from mealPlannerNext on the last day of the current week).
+  var weekId = (effectiveWeekId && effectiveWeekId >= computedWeekId)
+    ? effectiveWeekId
+    : computedWeekId;
+  var weekDate = new Date(weekId + 'T12:00:00');
   var entry = {
     weekId: weekId,
-    weekLabel: getWeekLabel(new Date()),
+    weekLabel: getWeekLabel(weekDate),
     savedAt: new Date().toISOString(),
     plan: JSON.parse(JSON.stringify(currentPlan)),
     notes: JSON.parse(JSON.stringify(currentPlanNotes))
@@ -418,33 +433,57 @@ function migratePlan(plan) {
 }
 
 /**
+ * Count how many slots in a plan have at least one meal assigned.
+ */
+function countFilledSlots(plan) {
+  if (!plan) return 0;
+  var n = 0;
+  Object.keys(plan).forEach(function(k) { if (plan[k] && plan[k].length > 0) n++; });
+  return n;
+}
+
+/**
  * Load the plan on startup. Migrates old single-string slot format to arrays.
  * Also checks mealPlannerNext (legacy store used when Daddy was always on "next week")
- * and promotes it to current if it matches this week.
+ * and prefers whichever store has more meal data — so a locally richer plan
+ * is never silently replaced by an empty one synced from the server.
  */
 function loadOnStartup() {
   var currentWeekId = getCustomWeekId(new Date());
 
-  try {
-    var data = JSON.parse(localStorage.getItem('mealPlannerCurrent'));
-    if (data && data.weekId === currentWeekId) {
-      currentPlanNotes = data.notes || {};
-      return migratePlan(data.plan);
-    }
-  } catch (e) { /* ignore */ }
+  var currentData = null;
+  try { currentData = JSON.parse(localStorage.getItem('mealPlannerCurrent')); } catch (e) {}
 
-  // Fallback: check legacy mealPlannerNext (Daddy's old "next week" store)
-  try {
-    var nextData = JSON.parse(localStorage.getItem('mealPlannerNext'));
-    if (nextData && nextData.weekId === currentWeekId) {
-      currentPlanNotes = nextData.notes || {};
-      var plan = migratePlan(nextData.plan);
-      // Promote to current so future saves go to the right place
-      try { localStorage.setItem('mealPlannerCurrent', JSON.stringify(nextData)); } catch (e2) {}
-      return plan;
-    }
-  } catch (e) { /* ignore */ }
+  var nextData = null;
+  try { nextData = JSON.parse(localStorage.getItem('mealPlannerNext')); } catch (e) {}
 
+  // Score each source: -1 means "not usable" (wrong weekId or missing)
+  var currentFilled = (currentData && currentData.weekId === currentWeekId)
+    ? countFilledSlots(currentData.plan) : -1;
+  // mealPlannerNext is accepted regardless of weekId (may be one week ahead)
+  var nextFilled = (nextData && nextData.plan) ? countFilledSlots(nextData.plan) : -1;
+
+  // Use mealPlannerNext if it has more data than mealPlannerCurrent.
+  // This recovers data that was planned ahead and saved to mealPlannerNext
+  // by the old "Daddy always on next week" logic.
+  if (nextFilled > currentFilled) {
+    effectiveWeekId = nextData.weekId || currentWeekId;
+    currentPlanNotes = nextData.notes || {};
+    var plan = migratePlan(nextData.plan);
+    // Copy into mealPlannerCurrent so it survives future refreshes
+    try { localStorage.setItem('mealPlannerCurrent', JSON.stringify(nextData)); } catch (e) {}
+    // Signal syncFromServer to push this richer local plan to the server
+    recoveredFromNext = true;
+    return plan;
+  }
+
+  if (currentFilled >= 0) {
+    effectiveWeekId = currentWeekId;
+    currentPlanNotes = currentData.notes || {};
+    return migratePlan(currentData.plan);
+  }
+
+  effectiveWeekId = currentWeekId;
   currentPlanNotes = {};
   return createEmptyPlan();
 }
@@ -482,15 +521,48 @@ function syncFromServer() {
       }
 
       if (!data.current) return;
-      // Server has a stale week — push local state up to fix it
-      if (data.current.weekId !== getCustomWeekId(new Date())) {
+
+      // If we just recovered richer data from mealPlannerNext, push it to
+      // the server rather than letting the server's empty plan overwrite us.
+      if (recoveredFromNext) {
+        recoveredFromNext = false;
         savePlan();
+        return;
+      }
+
+      var activeId = effectiveWeekId || getCustomWeekId(new Date());
+      if (data.current.weekId !== activeId) {
+        if (data.current.weekId > activeId) {
+          // Server is ahead (e.g. plan saved from another device for next week).
+          // Adopt the server's week so all devices stay in sync.
+          currentPlan = migratePlan(data.current.plan);
+          currentPlanNotes = data.current.notes || {};
+          effectiveWeekId = data.current.weekId;
+          try { localStorage.setItem('mealPlannerCurrent', JSON.stringify(data.current)); } catch (e) {}
+          updateWeekLabel();
+          renderWeekGrid();
+          fetchWishlists();
+        } else {
+          // Server is behind — push local state up to fix it
+          savePlan();
+        }
         return;
       }
       var incomingCurr = JSON.stringify(data.current.plan);
       if (incomingCurr === JSON.stringify(currentPlan)) return;
+
+      // Never let a plan with fewer meals overwrite one with more.
+      // If the server is empty and we have data locally, push ours up.
+      var serverFilled = countFilledSlots(data.current.plan);
+      var localFilled  = countFilledSlots(currentPlan);
+      if (serverFilled < localFilled) {
+        savePlan();
+        return;
+      }
+
       currentPlan = migratePlan(data.current.plan);
       currentPlanNotes = data.current.notes || {};
+      effectiveWeekId = data.current.weekId;
       try { localStorage.setItem('mealPlannerCurrent', JSON.stringify(data.current)); } catch (e) {}
       renderWeekGrid();
       fetchWishlists();
@@ -1639,12 +1711,16 @@ function renderWeekDropdown() {
   var menu = document.getElementById('week-dropdown-menu');
   menu.innerHTML = '';
 
+  var activeId = effectiveWeekId || getCustomWeekId(new Date());
+  var labelDate = new Date(activeId + 'T12:00:00');
+
   var currentItem = document.createElement('div');
   currentItem.className = 'week-dropdown-item week-dropdown-current';
-  currentItem.textContent = getWeekLabel(new Date());
+  currentItem.textContent = getWeekLabel(labelDate);
   menu.appendChild(currentItem);
 
-  var history = loadHistory();
+  // Filter out the current week to avoid duplicates
+  var history = loadHistory().filter(function(h) { return h.weekId !== activeId; });
   if (history.length > 0) {
     var divider = document.createElement('div');
     divider.className = 'week-dropdown-divider';
@@ -1733,7 +1809,10 @@ function showHistoryModal(entry) {
  * Update the week label in the header.
  */
 function updateWeekLabel() {
-  document.getElementById('week-label').textContent = getWeekLabel(new Date());
+  var labelDate = effectiveWeekId
+    ? new Date(effectiveWeekId + 'T12:00:00')
+    : new Date();
+  document.getElementById('week-label').textContent = getWeekLabel(labelDate);
 }
 
 

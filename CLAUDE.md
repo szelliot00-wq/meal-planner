@@ -10,14 +10,10 @@ Hosted on the spare MacBook Pro at `http://192.168.1.40:8090/app` via FastAPI/uv
 
 ⚠️ **Editing machine ≠ serving machine.** Code is edited on the main MacBook Air (`192.168.1.169`) but served from the spare MacBook Pro (`192.168.1.40`). After editing, copy changed files with:
 ```bash
-scp -o IdentitiesOnly=yes -i ~/.ssh/macbook_pro \
-  app.js styles.css index.html wishlist.html view.html \
-  steveelliott@192.168.1.40:~/Claude-projects/meal-planner/
-scp -o IdentitiesOnly=yes -i ~/.ssh/macbook_pro \
-  view/index.html \
-  steveelliott@192.168.1.40:~/Claude-projects/meal-planner/view/index.html
+scp -F ~/.ssh/config app.js styles.css index.html macbookpro:~/Claude-projects/meal-planner/
+scp -F ~/.ssh/config view/index.html macbookpro:~/Claude-projects/meal-planner/view/index.html
 ```
-SSH key: `~/.ssh/macbook_pro`. Project path on MacBook Pro: `~/Claude-projects/meal-planner/`.
+SSH alias `macbookpro` is defined in `~/.ssh/config` (HostName 192.168.1.40, User steveelliott, IdentityFile ~/.ssh/macbook_pro). Project path on MacBook Pro: `~/Claude-projects/meal-planner/`.
 
 ## Key features
 - Stacked single-page layout with all 7 days visible
@@ -94,6 +90,14 @@ The current week plan, history, and recipe version are stored in `plan.json` on 
 - Also syncs on tab focus (`visibilitychange`) and every 30 seconds
 - localStorage stays as the offline/fallback cache
 
+### Sync safety rules (in `syncFromServer`)
+- **Server week ahead of local** (e.g. plan saved from MacBook while iPhone still thinks it's last week) → adopt server's week ID and plan
+- **Server week behind local** → push local plan to server
+- **Server plan has fewer meals than local** → push local plan to server (prevents an empty device wiping a populated one)
+
+### effectiveWeekId
+`app.js` tracks `effectiveWeekId` separately from `getCustomWeekId(new Date())`. On the last day of a week, the plan may already have been saved for the *next* week's ID. `effectiveWeekId` ensures saves, labels, and sync checks all use the correct ID. Loaded from whichever localStorage store (`mealPlannerCurrent` or legacy `mealPlannerNext`) has more filled slots.
+
 ### Recipe cache invalidation
 When a recipe is approved on the server, `recipes_version` in `plan.json` is incremented. On the next sync, other devices compare this to their locally stored `mealPlannerRecipesVersion`. If the server version is higher, they clear the recipe cache and re-fetch from Google Sheets — new recipes appear within 30 seconds on all devices.
 
@@ -101,7 +105,8 @@ When a recipe is approved on the server, `recipes_version` in `plan.json` is inc
 | Key | Contents |
 |-----|----------|
 | `mealPlannerFavourites2` | `{ person: { mealId: bool } }` |
-| `mealPlannerCurrent` | Current week plan |
+| `mealPlannerCurrent` | Current week plan `{ weekId, weekLabel, savedAt, plan, notes }` |
+| `mealPlannerNext` | Legacy store — Daddy's "next week" plan from the old lock-week feature. Still checked on startup as a fallback; whichever of `mealPlannerCurrent`/`mealPlannerNext` has more filled slots wins. |
 | `mealPlannerHistory` | Array of past week entries (max 12) |
 | `mealPlannerRecipeCache` | Cached sheet data + timestamp (cleared on every page load) |
 | `mealPlannerRecipesVersion` | Last known `recipes_version` from server (for cache invalidation) |
