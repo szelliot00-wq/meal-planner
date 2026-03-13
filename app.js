@@ -419,13 +419,29 @@ function migratePlan(plan) {
 
 /**
  * Load the plan on startup. Migrates old single-string slot format to arrays.
+ * Also checks mealPlannerNext (legacy store used when Daddy was always on "next week")
+ * and promotes it to current if it matches this week.
  */
 function loadOnStartup() {
+  var currentWeekId = getCustomWeekId(new Date());
+
   try {
     var data = JSON.parse(localStorage.getItem('mealPlannerCurrent'));
-    if (data && data.weekId === getCustomWeekId(new Date())) {
+    if (data && data.weekId === currentWeekId) {
       currentPlanNotes = data.notes || {};
       return migratePlan(data.plan);
+    }
+  } catch (e) { /* ignore */ }
+
+  // Fallback: check legacy mealPlannerNext (Daddy's old "next week" store)
+  try {
+    var nextData = JSON.parse(localStorage.getItem('mealPlannerNext'));
+    if (nextData && nextData.weekId === currentWeekId) {
+      currentPlanNotes = nextData.notes || {};
+      var plan = migratePlan(nextData.plan);
+      // Promote to current so future saves go to the right place
+      try { localStorage.setItem('mealPlannerCurrent', JSON.stringify(nextData)); } catch (e2) {}
+      return plan;
     }
   } catch (e) { /* ignore */ }
 
