@@ -16,11 +16,12 @@
 
     header {
       background: #fff;
-      padding: 0.9rem 1rem;
+      padding: 0.75rem 1rem;
       border-bottom: 1px solid #e2e8f0;
       display: flex;
       align-items: center;
       justify-content: space-between;
+      gap: 0.5rem;
       position: sticky;
       top: 0;
       z-index: 10;
@@ -30,6 +31,19 @@
       font-size: 1.05rem;
       font-weight: 700;
       color: #1e293b;
+      flex-shrink: 0;
+    }
+
+    #week-select {
+      flex: 1;
+      max-width: 200px;
+      font-size: 0.8rem;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      padding: 0.3rem 0.5rem;
+      color: #475569;
+      background: #f8fafc;
+      cursor: pointer;
     }
 
     .refresh-btn {
@@ -40,6 +54,7 @@
       font-size: 0.8rem;
       color: #64748b;
       cursor: pointer;
+      flex-shrink: 0;
     }
 
     .refresh-btn:active { background: #f1f5f9; }
@@ -55,9 +70,7 @@
       border: 2px solid transparent;
     }
 
-    .day-card.today {
-      border-color: #6366f1;
-    }
+    .day-card.today { border-color: #6366f1; }
 
     .day-header {
       padding: 0.6rem 1rem;
@@ -83,13 +96,8 @@
       border-radius: 99px;
     }
 
-    .meal-section {
-      padding: 0.5rem 1rem 0.6rem;
-    }
-
-    .meal-section + .meal-section {
-      border-top: 1px solid #f1f5f9;
-    }
+    .meal-section { padding: 0.5rem 1rem 0.6rem; }
+    .meal-section + .meal-section { border-top: 1px solid #f1f5f9; }
 
     .meal-label {
       font-size: 0.68rem;
@@ -115,18 +123,9 @@
       font-weight: 500;
     }
 
-    .meal-names {
-      color: #1e293b;
-    }
-
-    .meal-note {
-      font-style: italic;
-      color: #166534;
-    }
-
-    .no-meal {
-      color: #cbd5e1;
-    }
+    .meal-names { color: #1e293b; }
+    .meal-note { font-style: italic; color: #166534; }
+    .no-meal { color: #cbd5e1; }
 
     .status {
       text-align: center;
@@ -149,23 +148,24 @@
 
 <header>
   <h1>Meal Planner</h1>
-  <button class="refresh-btn" onclick="loadData()">↻ Refresh</button>
+  <select id="week-select" onchange="onWeekChange()"></select>
+  <button class="refresh-btn" onclick="loadData()">↻</button>
 </header>
 
 <div id="content"><p class="status">Loading…</p></div>
 <p class="status" id="last-updated"></p>
 
 <script>
-  var ALL_DAYS     = ['fri','sat','sun','mon','tue','wed','thu'];
-  var DAY_LABELS   = { fri:'Friday', sat:'Saturday', sun:'Sunday', mon:'Monday', tue:'Tuesday', wed:'Wednesday', thu:'Thursday' };
-  var MEALS_OF_DAY = ['lunch','dinner'];
-  var MEAL_LABELS  = { lunch:'LUNCH', dinner:'DINNER' };
-  var PEOPLE       = ['steve','zoe','dylan'];
+  var ALL_DAYS      = ['fri','sat','sun','mon','tue','wed','thu'];
+  var DAY_LABELS    = { fri:'Friday', sat:'Saturday', sun:'Sunday', mon:'Monday', tue:'Tuesday', wed:'Wednesday', thu:'Thursday' };
+  var MEALS_OF_DAY  = ['lunch','dinner'];
+  var MEAL_LABELS   = { lunch:'LUNCH', dinner:'DINNER' };
+  var PEOPLE        = ['steve','zoe','dylan'];
   var PEOPLE_LABELS = { steve:'Daddy', zoe:'Zbutt', dylan:'Dyl-Boi' };
 
-  var mealsById = {};
-  var currentPlan = {};
-  var currentNotes = {};
+  var mealsById   = {};
+  var allWeeks    = [];   // [{ weekId, weekLabel, plan, notes }, ...]
+  var currentWeekId = null; // the server's "current" week
 
   function getTodayKey() {
     return ['sun','mon','tue','wed','thu','fri','sat'][new Date().getDay()];
@@ -175,8 +175,20 @@
     return day + '-' + meal + '-' + person;
   }
 
+  function selectedWeek() {
+    var sel = document.getElementById('week-select');
+    return allWeeks[sel.selectedIndex] || null;
+  }
+
+  function onWeekChange() {
+    render();
+  }
+
   function loadData() {
-    document.getElementById('last-updated').textContent = '';
+    var prevSelectedId = allWeeks.length
+      ? (selectedWeek() || {}).weekId
+      : null;
+
     Promise.all([
       fetch('/meals').then(function(r) { return r.json(); }),
       fetch('/plan').then(function(r) { return r.json(); })
@@ -189,11 +201,47 @@
         mealsById[m.id] = m.name;
       });
 
-      currentPlan  = {};
-      currentNotes = {};
-      if (planData && planData.current && planData.current.plan) {
-        currentPlan  = planData.current.plan;
-        currentNotes = planData.current.notes || {};
+      allWeeks = [];
+      if (planData && planData.current) {
+        currentWeekId = planData.current.weekId;
+        allWeeks.push({
+          weekId:    planData.current.weekId,
+          weekLabel: planData.current.weekLabel || 'This week',
+          plan:      planData.current.plan  || {},
+          notes:     planData.current.notes || {}
+        });
+      }
+      if (planData && Array.isArray(planData.history)) {
+        planData.history.forEach(function(h) {
+          if (h.weekId !== currentWeekId) {
+            allWeeks.push({
+              weekId:    h.weekId,
+              weekLabel: h.weekLabel || h.weekId,
+              plan:      h.plan  || {},
+              notes:     h.notes || {}
+            });
+          }
+        });
+      }
+
+      // Rebuild the select, preserving selection if possible
+      var sel = document.getElementById('week-select');
+      sel.innerHTML = '';
+      allWeeks.forEach(function(w, i) {
+        var opt = document.createElement('option');
+        opt.value = w.weekId;
+        opt.textContent = i === 0 ? 'This week' : w.weekLabel;
+        sel.appendChild(opt);
+      });
+
+      // Restore previous selection or default to current week
+      if (prevSelectedId) {
+        for (var i = 0; i < allWeeks.length; i++) {
+          if (allWeeks[i].weekId === prevSelectedId) {
+            sel.selectedIndex = i;
+            break;
+          }
+        }
       }
 
       render();
@@ -206,22 +254,31 @@
   }
 
   function render() {
+    var week = selectedWeek();
+    if (!week) return;
+
+    var plan  = week.plan;
+    var notes = week.notes;
+    var isCurrentWeek = week.weekId === currentWeekId;
     var today = getTodayKey();
-    var todayIdx = ALL_DAYS.indexOf(today);
-    // Rotate so today is first
-    var days = todayIdx >= 0
-      ? ALL_DAYS.slice(todayIdx).concat(ALL_DAYS.slice(0, todayIdx))
-      : ALL_DAYS;
+
+    // Rotate days so today is first (only when viewing current week)
+    var days = ALL_DAYS.slice();
+    if (isCurrentWeek) {
+      var todayIdx = days.indexOf(today);
+      if (todayIdx > 0) {
+        days = days.slice(todayIdx).concat(days.slice(0, todayIdx));
+      }
+    }
 
     var content = document.getElementById('content');
     content.innerHTML = '';
 
     days.forEach(function(day) {
-      var isToday = day === today;
+      var isToday = isCurrentWeek && day === today;
       var card    = document.createElement('div');
       card.className = 'day-card' + (isToday ? ' today' : '');
 
-      // Day header
       var header = document.createElement('div');
       header.className = 'day-header';
       header.textContent = DAY_LABELS[day];
@@ -233,7 +290,6 @@
       }
       card.appendChild(header);
 
-      // Lunch + Dinner sections
       MEALS_OF_DAY.forEach(function(mealTime) {
         var section = document.createElement('div');
         section.className = 'meal-section';
@@ -245,8 +301,8 @@
 
         PEOPLE.forEach(function(person) {
           var key  = slotKey(day, mealTime, person);
-          var ids  = currentPlan[key] || [];
-          var note = currentNotes[key] || '';
+          var ids  = plan[key] || [];
+          var note = notes[key] || '';
 
           var row = document.createElement('div');
           row.className = 'person-row';
@@ -256,38 +312,27 @@
           nameEl.textContent = PEOPLE_LABELS[person];
           row.appendChild(nameEl);
 
-          var valueEl = document.createElement('span');
-
           if (ids.length === 0 && !note) {
-            valueEl.className = 'no-meal';
-            valueEl.textContent = '—';
+            var emptyEl = document.createElement('span');
+            emptyEl.className = 'no-meal';
+            emptyEl.textContent = '—';
+            row.appendChild(emptyEl);
           } else {
             var parts = ids.map(function(id) { return mealsById[id] || id; });
+            if (parts.length > 0) {
+              var mealsEl = document.createElement('span');
+              mealsEl.className = 'meal-names';
+              mealsEl.textContent = parts.join(', ');
+              row.appendChild(mealsEl);
+            }
             if (note) {
-              // Render note separately so it can be styled differently
-              var mealsText = parts.join(', ');
-              if (mealsText) {
-                valueEl.className = 'meal-names';
-                valueEl.textContent = mealsText;
-                row.appendChild(valueEl);
-
-                var noteEl = document.createElement('span');
-                noteEl.className = 'meal-note';
-                noteEl.textContent = (mealsText ? ', ' : '') + note;
-                row.appendChild(noteEl);
-                section.appendChild(row);
-                return; // already appended
-              } else {
-                valueEl.className = 'meal-note';
-                valueEl.textContent = note;
-              }
-            } else {
-              valueEl.className = 'meal-names';
-              valueEl.textContent = parts.join(', ');
+              var noteEl = document.createElement('span');
+              noteEl.className = 'meal-note';
+              noteEl.textContent = (parts.length > 0 ? ', ' : '') + note;
+              row.appendChild(noteEl);
             }
           }
 
-          row.appendChild(valueEl);
           section.appendChild(row);
         });
 
@@ -298,7 +343,6 @@
     });
   }
 
-  // Load on start, then refresh every 5 minutes
   loadData();
   setInterval(loadData, 5 * 60 * 1000);
 </script>
