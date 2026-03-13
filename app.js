@@ -1717,7 +1717,7 @@ function showHistoryModal(entry) {
  * Update the week label in the header.
  */
 function updateWeekLabel() {
-  document.getElementById('week-label').textContent = getWeekLabel(getViewDate());
+  document.getElementById('week-label').textContent = getWeekLabel(new Date());
 }
 
 
