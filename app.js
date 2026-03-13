@@ -463,10 +463,10 @@ function loadOnStartup() {
   // mealPlannerNext is accepted regardless of weekId (may be one week ahead)
   var nextFilled = (nextData && nextData.plan) ? countFilledSlots(nextData.plan) : -1;
 
-  // Use mealPlannerNext if it has more data than mealPlannerCurrent.
+  // Use mealPlannerNext only if it has actual meals AND more than mealPlannerCurrent.
   // This recovers data that was planned ahead and saved to mealPlannerNext
   // by the old "Daddy always on next week" logic.
-  if (nextFilled > currentFilled) {
+  if (nextFilled > 0 && nextFilled > currentFilled) {
     effectiveWeekId = nextData.weekId || currentWeekId;
     currentPlanNotes = nextData.notes || {};
     var plan = migratePlan(nextData.plan);
@@ -523,11 +523,16 @@ function syncFromServer() {
       if (!data.current) return;
 
       // If we just recovered richer data from mealPlannerNext, push it to
-      // the server rather than letting the server's empty plan overwrite us.
+      // the server — but only if local actually has more meals than server.
       if (recoveredFromNext) {
         recoveredFromNext = false;
-        savePlan();
-        return;
+        var localFilledNext = countFilledSlots(currentPlan);
+        var serverFilledNext = countFilledSlots(data.current ? data.current.plan : {});
+        if (localFilledNext > serverFilledNext) {
+          savePlan();
+          return;
+        }
+        // Server has more data — fall through to normal sync logic below
       }
 
       var activeId = effectiveWeekId || getCustomWeekId(new Date());

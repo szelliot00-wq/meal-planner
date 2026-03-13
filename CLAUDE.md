@@ -95,6 +95,9 @@ The current week plan, history, and recipe version are stored in `plan.json` on 
 - **Server week behind local** → push local plan to server
 - **Server plan has fewer meals than local** → push local plan to server (prevents an empty device wiping a populated one)
 
+### Server-side protection (in `main.py` `POST /plan`)
+The server **rejects** any save where the incoming plan has fewer filled slots than what's already stored. An empty device (e.g. iPhone shortcut with isolated localStorage) can never wipe a populated plan. Rejected saves are logged as warnings. The server also writes a rolling backup (`plan_backup_YYYYMMDD_HHMMSS.json`) on every non-empty save, keeping the last 5.
+
 ### effectiveWeekId
 `app.js` tracks `effectiveWeekId` separately from `getCustomWeekId(new Date())`. On the last day of a week, the plan may already have been saved for the *next* week's ID. `effectiveWeekId` ensures saves, labels, and sync checks all use the correct ID. Loaded from whichever localStorage store (`mealPlannerCurrent` or legacy `mealPlannerNext`) has more filled slots.
 
