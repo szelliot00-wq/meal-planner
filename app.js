@@ -601,7 +601,11 @@ function syncFromServer() {
         renderWeekGrid();
       } else {
         if (!data.current) return;
-        if (data.current.weekId !== getCustomWeekId(new Date())) return;
+        // Server has a stale week — push local state up to fix it
+        if (data.current.weekId !== getCustomWeekId(new Date())) {
+          savePlan();
+          return;
+        }
         var incomingCurr = JSON.stringify(data.current.plan);
         if (incomingCurr === JSON.stringify(currentPlan)) return;
         currentPlan = migratePlan(data.current.plan);
