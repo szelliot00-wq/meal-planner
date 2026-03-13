@@ -133,6 +133,9 @@ var MEALS = [];
 // The current week's meal assignments: { "mon-lunch-steve": "omelette", ... }
 var currentPlan = {};
 
+// Free-form notes per slot — Daddy only: { "mon-lunch-steve": "Out" }
+var currentPlanNotes = {};
+
 // Which day the week starts on (configurable, default Friday)
 var startDay = 'fri';
 
@@ -374,7 +377,8 @@ function savePlan() {
     weekId: weekId,
     weekLabel: getWeekLabel(viewDate),
     savedAt: new Date().toISOString(),
-    plan: JSON.parse(JSON.stringify(currentPlan))
+    plan: JSON.parse(JSON.stringify(currentPlan)),
+    notes: JSON.parse(JSON.stringify(currentPlanNotes))
   };
 
   try {
@@ -460,19 +464,23 @@ function loadOnStartup() {
     try {
       var nextData = JSON.parse(localStorage.getItem('mealPlannerNext'));
       if (nextData && nextData.plan) {
+        currentPlanNotes = nextData.notes || {};
         return migratePlan(nextData.plan);
       }
     } catch (e) { /* ignore */ }
+    currentPlanNotes = {};
     return createEmptyPlan();
   }
 
   try {
     var data = JSON.parse(localStorage.getItem('mealPlannerCurrent'));
     if (data && data.weekId === getCustomWeekId(new Date())) {
+      currentPlanNotes = data.notes || {};
       return migratePlan(data.plan);
     }
   } catch (e) { /* ignore */ }
 
+  currentPlanNotes = {};
   return createEmptyPlan();
 }
 
@@ -528,6 +536,7 @@ function syncFromServer() {
           };
           // Steve always views next week — after rollover he gets a blank new week
           currentPlan = (currentUser === 'steve') ? createEmptyPlan() : promotedPlan;
+          currentPlanNotes = {};
           try { localStorage.setItem('mealPlannerCurrent', JSON.stringify(promotedEntry)); } catch (e) {}
           try { localStorage.removeItem('mealPlannerNext'); } catch (e) {}
           weekLocked = false;
@@ -563,6 +572,7 @@ function syncFromServer() {
               ? migratePlan(JSON.parse(JSON.stringify(data.next.plan)))
               : createEmptyPlan();
             currentPlan = nextPlan;
+            currentPlanNotes = (data.next && data.next.notes) ? data.next.notes : {};
             try { localStorage.setItem('mealPlannerNext', JSON.stringify(data.next || { weekId: getCustomWeekId(getViewDate()), plan: nextPlan })); } catch (e) {}
             renderWeekGrid();
             return;
@@ -572,6 +582,7 @@ function syncFromServer() {
             currentPlan = (data.current && data.current.plan)
               ? migratePlan(data.current.plan)
               : createEmptyPlan();
+            currentPlanNotes = (data.current && data.current.notes) ? data.current.notes : {};
             renderWeekGrid();
             return;
           }
@@ -585,6 +596,7 @@ function syncFromServer() {
         var incomingNext = JSON.stringify(data.next.plan || {});
         if (incomingNext === JSON.stringify(currentPlan)) return;
         currentPlan = migratePlan(data.next.plan || {});
+        currentPlanNotes = data.next.notes || {};
         try { localStorage.setItem('mealPlannerNext', JSON.stringify(data.next)); } catch (e) {}
         renderWeekGrid();
       } else {
@@ -593,6 +605,7 @@ function syncFromServer() {
         var incomingCurr = JSON.stringify(data.current.plan);
         if (incomingCurr === JSON.stringify(currentPlan)) return;
         currentPlan = migratePlan(data.current.plan);
+        currentPlanNotes = data.current.notes || {};
         try { localStorage.setItem('mealPlannerCurrent', JSON.stringify(data.current)); } catch (e) {}
         renderWeekGrid();
       }
@@ -1648,11 +1661,21 @@ function renderWeekGrid() {
 
         // Render all assigned meals (multiple allowed)
         var assignedMeals = currentPlan[key] || [];
-        if (assignedMeals.length > 0) {
+        var existingNote = currentUser === 'steve' ? (currentPlanNotes[key] || '') : '';
+        if (assignedMeals.length > 0 || existingNote) {
           cell.classList.add('has-meal');
           assignedMeals.forEach(function(mealId) {
             renderAssignedMeal(cell, key, mealId);
           });
+        }
+
+        // Render note / add-note affordance for Daddy
+        if (currentUser === 'steve') {
+          if (existingNote) {
+            renderNoteTag(cell, key, existingNote);
+          } else {
+            renderAddNoteBtn(cell, key);
+          }
         }
 
         // Set up drag-and-drop on this cell
@@ -1693,6 +1716,102 @@ function renderAssignedMeal(cell, key, mealId) {
   }
 
   cell.appendChild(tag);
+}
+
+/**
+ * Render a saved free-form note tag inside a cell (Daddy only).
+ * Clicking the text makes it editable; clicking ✕ removes it.
+ */
+function renderNoteTag(cell, key, note) {
+  var tag = document.createElement('div');
+  tag.className = 'assigned-note';
+
+  var textSpan = document.createElement('span');
+  textSpan.className = 'note-text';
+  textSpan.textContent = note;
+  tag.appendChild(textSpan);
+
+  var removeHint = document.createElement('span');
+  removeHint.className = 'remove-hint';
+  removeHint.textContent = ' ✕';
+  tag.appendChild(removeHint);
+
+  textSpan.addEventListener('click', function() {
+    showNoteInput(cell, key, note);
+  });
+
+  removeHint.addEventListener('click', function(e) {
+    e.stopPropagation();
+    delete currentPlanNotes[key];
+    savePlan();
+    renderWeekGrid();
+  });
+
+  cell.appendChild(tag);
+}
+
+/**
+ * Render a small "✎ add note" button at the bottom of a cell (Daddy only).
+ */
+function renderAddNoteBtn(cell, key) {
+  var btn = document.createElement('button');
+  btn.className = 'add-note-btn';
+  btn.textContent = '✎ note';
+  btn.addEventListener('click', function() {
+    showNoteInput(cell, key, '');
+  });
+  cell.appendChild(btn);
+}
+
+/**
+ * Replace the note tag / add-note button with an inline text input.
+ * Commits on Enter or blur; cancels on Escape.
+ */
+function showNoteInput(cell, key, currentValue) {
+  var existing = cell.querySelector('.assigned-note, .add-note-btn');
+  if (existing) existing.remove();
+
+  var wrapper = document.createElement('div');
+  wrapper.className = 'note-input-wrapper';
+
+  var input = document.createElement('input');
+  input.type = 'text';
+  input.className = 'note-input';
+  input.value = currentValue;
+  input.placeholder = 'e.g. Out, Takeaway…';
+  input.setAttribute('inputmode', 'text');
+  wrapper.appendChild(input);
+  cell.appendChild(wrapper);
+
+  input.focus();
+  input.select();
+
+  var committed = false;
+
+  function commit() {
+    if (committed) return;
+    committed = true;
+    var val = input.value.trim();
+    if (val) {
+      currentPlanNotes[key] = val;
+    } else {
+      delete currentPlanNotes[key];
+    }
+    savePlan();
+    renderWeekGrid();
+  }
+
+  input.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      commit();
+    } else if (e.key === 'Escape') {
+      committed = true;
+      renderWeekGrid();
+    }
+  });
+
+  input.addEventListener('blur', commit);
 }
 
 /**
@@ -1883,6 +2002,7 @@ function clearWeek() {
     });
   });
 
+  currentPlanNotes = {};
   savePlan();
   renderWeekGrid();
   showToast('Week cleared');

@@ -8,6 +8,14 @@ Open `index.html` in a browser. No server or build step needed.
 
 Hosted on the spare MacBook Pro at `http://192.168.1.40:8090/app` via FastAPI/uvicorn (launchd agent `com.steveelliott.tiktok-recipes` on port 8090).
 
+⚠️ **Editing machine ≠ serving machine.** Code is edited on the main MacBook Air (`192.168.1.169`) but served from the spare MacBook Pro (`192.168.1.40`). After editing, copy changed files with:
+```bash
+scp -o IdentitiesOnly=yes -i ~/.ssh/macbook_pro \
+  app.js styles.css index.html wishlist.html \
+  steveelliott@192.168.1.40:~/Claude-projects/meal-planner/
+```
+SSH key: `~/.ssh/macbook_pro`. Project path on MacBook Pro: `~/Claude-projects/meal-planner/`.
+
 ## Key features
 - Stacked single-page layout with all 7 days visible
 - Configurable start day — moved to a discreet fixed pill at bottom-right of screen
