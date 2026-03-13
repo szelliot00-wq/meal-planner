@@ -132,34 +132,6 @@ body {
   opacity: 1;
 }
 
-/* Locked week banner — shown to Zoe/Dylan when Daddy locks the week */
-.locked-banner {
-  background: #fef3c7;
-  border-bottom: 2px solid #fcd34d;
-  color: #92400e;
-  font-size: 0.8rem;
-  font-weight: 600;
-  padding: 0.45rem 1rem;
-  text-align: center;
-}
-
-/* Lock button active state (when week is locked) */
-.btn-lock-active {
-  background: #f97316 !important;
-  color: #fff !important;
-}
-
-/* New Food Request button in the sidebar */
-.btn-request {
-  background: #fee2e2;
-  color: #b91c1c;
-  width: 100%;
-  margin-bottom: 0.75rem;
-}
-.btn-request:hover {
-  background: #fecaca;
-}
-
 /* ── Page layout: content (left) + sidebar (right) ── */
 .layout {
   display: grid;
@@ -938,36 +910,6 @@ body {
   padding: 1.5rem 0;
 }
 
-/* ── Food request who selector ── */
-.request-who {
-  display: flex;
-  gap: 1.5rem;
-  margin-bottom: 0.75rem;
-  font-size: 1rem;
-}
-.request-who-label {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  cursor: pointer;
-  font-weight: 600;
-}
-
-/* ── Food request text input ── */
-.request-food-input {
-  width: 100%;
-  padding: 0.6rem 0.75rem;
-  border: 1px solid #d1d5db;
-  border-radius: 8px;
-  font-size: 1rem;
-  outline: none;
-  box-sizing: border-box;
-}
-.request-food-input:focus {
-  border-color: #2563eb;
-  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
-}
-
 /* ── Favourite star button on meal cards ── */
 .meal-card-star {
   background: none;
@@ -985,27 +927,6 @@ body {
   color: #f59e0b;
 }
 
-/* ── Person selector modal ── */
-.person-selector-modal { max-width: 380px; }
-.person-selector-body {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  padding: 1.5rem;
-}
-.person-btn {
-  padding: 1rem;
-  font-size: 1.2rem;
-  font-weight: 700;
-  border: none;
-  border-radius: 10px;
-  cursor: pointer;
-  background: #6366f1;
-  color: #fff;
-  transition: background 0.15s, transform 0.1s;
-}
-.person-btn:hover { background: #4f46e5; transform: translateY(-2px); }
-
 /* ── Sidebar meal section headers (Favourites / All Meals) ── */
 .meal-section-header {
   font-size: 0.68rem;
@@ -1016,18 +937,6 @@ body {
   margin: 0.6rem 0 0.3rem;
 }
 .meal-section-header:first-child { margin-top: 0; }
-
-/* ── Viewing-as indicator in header ── */
-.viewing-as { font-size: 0.72rem; color: #64748b; }
-.switch-user-btn {
-  background: none;
-  border: none;
-  color: #6366f1;
-  font-size: 0.72rem;
-  cursor: pointer;
-  padding: 0;
-  text-decoration: underline;
-}
 
 /* ── Sidebar tab bar ── */
 .sidebar-tabs {

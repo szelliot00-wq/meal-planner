@@ -13,21 +13,14 @@
     <header class="header">
       <h1>Meal Planner</h1>
       <div class="header-controls">
-        <div class="viewing-as" id="viewing-as"></div>
-        <button class="btn btn-request header-btn" id="food-request-btn">+ Request</button>
         <div class="week-dropdown" id="week-dropdown">
           <button class="week-dropdown-btn" id="week-dropdown-btn">
             <span id="week-label"></span><span class="week-caret"> ▾</span>
           </button>
           <div class="week-dropdown-menu" id="week-dropdown-menu" hidden></div>
         </div>
-        <button class="btn header-btn" id="lock-btn" hidden>Lock Week</button>
       </div>
     </header>
-
-    <div class="locked-banner" id="locked-banner" hidden>
-      This week is locked — you're planning next week
-    </div>
 
     <!-- ===== MAIN LAYOUT: content + sidebar (meals on RHS) ===== -->
     <div class="layout">
@@ -111,31 +104,6 @@
       </div>
     </div>
 
-    <!-- ===== FOOD REQUEST MODAL ===== -->
-    <div class="modal-overlay" id="request-modal-overlay" hidden>
-      <div class="modal">
-        <div class="modal-header">
-          <h2>Request a Food</h2>
-          <button class="modal-close" id="request-modal-close">&times;</button>
-        </div>
-        <div class="modal-body">
-          <div class="request-who">
-            <label class="request-who-label">
-              <input type="radio" name="request-who" value="Dylan" checked> Dyl-Boi
-            </label>
-            <label class="request-who-label">
-              <input type="radio" name="request-who" value="Zoe"> Zbutt
-            </label>
-          </div>
-          <input type="text" id="request-food-input" class="request-food-input"
-            placeholder="What do you want to eat?" autocomplete="off">
-        </div>
-        <div class="modal-footer">
-          <button class="btn btn-primary" id="request-modal-submit">Send Request</button>
-        </div>
-      </div>
-    </div>
-
     <!-- ===== RECIPE DETAIL MODAL ===== -->
     <div class="modal-overlay" id="recipe-modal-overlay" hidden>
       <div class="modal">
@@ -148,21 +116,6 @@
         </div>
         <div class="modal-footer">
           <button class="btn btn-secondary" id="recipe-modal-done">Close</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- ===== PERSON SELECTOR MODAL ===== -->
-    <div class="modal-overlay" id="person-selector-overlay" hidden>
-      <div class="modal person-selector-modal">
-        <div class="modal-header">
-          <h2>Who are you?</h2>
-          <button class="modal-close" id="person-selector-close">&times;</button>
-        </div>
-        <div class="modal-body person-selector-body">
-          <button class="person-btn" data-person="steve">Daddy</button>
-          <button class="person-btn" data-person="zoe">Zbutt</button>
-          <button class="person-btn" data-person="dylan">Dyl-Boi</button>
         </div>
       </div>
     </div>

@@ -11,8 +11,11 @@ Hosted on the spare MacBook Pro at `http://192.168.1.40:8090/app` via FastAPI/uv
 ⚠️ **Editing machine ≠ serving machine.** Code is edited on the main MacBook Air (`192.168.1.169`) but served from the spare MacBook Pro (`192.168.1.40`). After editing, copy changed files with:
 ```bash
 scp -o IdentitiesOnly=yes -i ~/.ssh/macbook_pro \
-  app.js styles.css index.html wishlist.html \
+  app.js styles.css index.html wishlist.html view.html \
   steveelliott@192.168.1.40:~/Claude-projects/meal-planner/
+scp -o IdentitiesOnly=yes -i ~/.ssh/macbook_pro \
+  view/index.html \
+  steveelliott@192.168.1.40:~/Claude-projects/meal-planner/view/index.html
 ```
 SSH key: `~/.ssh/macbook_pro`. Project path on MacBook Pro: `~/Claude-projects/meal-planner/`.
 
@@ -26,18 +29,12 @@ SSH key: `~/.ssh/macbook_pro`. Project path on MacBook Pro: `~/Claude-projects/m
 - Week history in header dropdown — click current week label to see past weeks, click one to view/copy
 - Recipe detail modal with instructions, timing, and source link
 - Google Sheets integration for recipe database (with hardcoded fallback)
-- Lock Week: Daddy can lock the current week so Zoe/Dylan see next week instead; auto-clears when week rolls over
-  - Columns A–G: RecipeID, RecipeName, Instructions, PrepTime, CookTime, Source, Type
-  - Columns H–J: Favourite Zoe, Favourite Dylan, Favourite Daddy (Y = favourite)
 - Pending recipe review: discreet tab fixed at bottom-centre → approve or reject new recipes
-- Food requests: "+ Request" button in header, select Dyl-Boi or Zbutt, enter food → goes to Pending tab
 
 ## Person identity
-- On first load, a person selector modal appears ("Who are you?")
-- Selection persisted in `localStorage` key `mealPlannerCurrentUser`
-- "Viewing as: Daddy · Switch" shown in header; click Switch to change person
+- Always Daddy (`currentUser = 'steve'`) — hardcoded on init, no selector
 - Internal keys: `steve`, `zoe`, `dylan` — display labels: `Daddy`, `Zbutt`, `Dyl-Boi`
-- `PEOPLE_LABELS` in `app.js` controls display names
+- `PEOPLE_LABELS` in `app.js` controls display names (still used to label grid columns)
 
 ## Favourites
 - Per-person favourites driven by Google Sheet columns H (Zoe), I (Dylan), J (Daddy) — `Y` = favourite
@@ -80,24 +77,14 @@ New TikTok recipes land in the **Pending** Google Sheet tab, not Recipes. The pi
   - Approve: moves row from Pending to Recipes instantly
   - Reject: deletes row from Pending instantly
 
-## Food requests
-Kids tap **"+ Request"** in the header:
-- Select Dyl-Boi or Zbutt
-- Type what they want
-- Tap Send → goes to Pending tab with `type=request`
-- Approved requests appear in the meal sidebar styled identically to regular meal cards
-
 ## Pipeline API (same server, port 8090)
 `API_BASE` in `app.js` is `''` (same origin):
 - `GET /pending` — fetch count and list of pending items
 - `POST /approve/{id}` — approve a recipe
 - `DELETE /pending/{id}` — reject a recipe
-- `POST /request` — submit a food request (body: `{"name": "Dylan: Pizza"}`)
 - `POST /favourite` — toggle a favourite (body: `{ recipe_id, person, actor, value }`)
-- `GET /plan` — fetch shared plan `{ current, history, locked, locked_week_id, next }` from server
+- `GET /plan` — fetch shared plan `{ current, history }` from server
 - `POST /plan` — save shared plan to server (body: `{ current, history }`)
-- `POST /lock` — set/clear week lock (body: `{ locked, week_id }`)
-- `POST /plan/next` — save next-week plan (body: `{ current }`) — used when week is locked
 
 ## Cross-device sync
 The current week plan, history, and recipe version are stored in `plan.json` on the server.
@@ -113,16 +100,12 @@ When a recipe is approved on the server, `recipes_version` in `plan.json` is inc
 ## localStorage keys
 | Key | Contents |
 |-----|----------|
-| `mealPlannerCurrentUser` | `'steve'` \| `'zoe'` \| `'dylan'` |
 | `mealPlannerFavourites2` | `{ person: { mealId: bool } }` |
 | `mealPlannerCurrent` | Current week plan |
-| `mealPlannerNext` | Next-week plan (used when week is locked) |
 | `mealPlannerHistory` | Array of past week entries (max 12) |
 | `mealPlannerRecipeCache` | Cached sheet data + timestamp (cleared on every page load) |
 | `mealPlannerRecipesVersion` | Last known `recipes_version` from server (for cache invalidation) |
 | `mealPlannerStartDay` | `'mon'`…`'sun'` |
-| `mealPlannerLocked` | `'1'` if week is locked, else `'0'` |
-| `mealPlannerLockedWeekId` | Week ID that was locked (e.g. `'2026-03-07'`) |
 
 ## Kids wishlist
 
