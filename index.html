@@ -38,11 +38,12 @@
       </main>
 
       <!-- --- Sidebar on the RIGHT: meal menu + actions --- -->
-      <aside class="sidebar">
+      <aside class="sidebar" id="sidebar">
         <div class="sidebar-tabs">
           <button class="sidebar-tab sidebar-tab--active" id="tab-meals">Meals</button>
           <button class="sidebar-tab" id="tab-wishes">Wishes<span class="wishes-badge" id="wishes-badge" hidden></span></button>
           <button class="sidebar-tab" id="tab-tescos">Tescos<span class="wishes-badge" id="tescos-badge" hidden></span></button>
+          <button class="sidebar-collapse-btn" id="sidebar-collapse-btn" title="Hide sidebar">◀</button>
         </div>
 
         <div id="sidebar-meals-panel">
@@ -179,6 +180,9 @@
       <option value="sun">Sun</option>
     </select>
   </div>
+
+  <!-- Sidebar reopen button — shown when sidebar is collapsed -->
+  <button class="sidebar-open-btn" id="sidebar-open-btn" hidden>Meals ▶</button>
 
   <!-- Pending review button — fixed at bottom, discreet -->
   <button class="pending-fab" id="pending-btn" hidden>

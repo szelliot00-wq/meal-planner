@@ -865,7 +865,7 @@ body {
 
   .sidebar {
     position: static;
-    order: -1; /* Put meals above the grid on mobile */
+    order: 2; /* Sidebar below meal grid on mobile */
   }
 
   .person-slots {
@@ -1051,6 +1051,50 @@ body {
 .sidebar-tab--active {
   color: #6366f1;
   border-bottom-color: #6366f1;
+}
+
+/* ── Sidebar collapse/expand ── */
+.sidebar-collapse-btn {
+  background: none;
+  border: none;
+  padding: 0.4rem 0.5rem;
+  color: #94a3b8;
+  cursor: pointer;
+  font-size: 0.75rem;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+.sidebar-collapse-btn:hover { color: #6366f1; }
+
+/* When sidebar is hidden, expand the grid */
+.layout.sidebar--collapsed {
+  grid-template-columns: 1fr;
+}
+
+/* Reopen button — fixed top-right when sidebar is collapsed */
+.sidebar-open-btn {
+  position: fixed;
+  top: 4.5rem;
+  right: 0;
+  background: #6366f1;
+  color: #fff;
+  border: none;
+  border-radius: 6px 0 0 6px;
+  padding: 0.4rem 0.6rem;
+  font-size: 0.75rem;
+  cursor: pointer;
+  z-index: 50;
+  box-shadow: -2px 2px 6px rgba(0,0,0,0.15);
+}
+.sidebar-open-btn:hover { background: #4f46e5; }
+
+@media (max-width: 768px) {
+  .sidebar-open-btn {
+    top: auto;
+    bottom: 5rem;
+    right: 0;
+    border-radius: 6px 0 0 6px;
+  }
 }
 .wishes-badge {
   display: inline-block;

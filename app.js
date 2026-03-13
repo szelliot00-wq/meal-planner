@@ -2121,6 +2121,29 @@ document.getElementById('start-day-select').addEventListener('change', function(
   changeStartDay(this.value);
 });
 
+// Sidebar collapse/expand
+(function() {
+  var sidebar   = document.getElementById('sidebar');
+  var layout    = document.querySelector('.layout');
+  var collapseBtn = document.getElementById('sidebar-collapse-btn');
+  var openBtn   = document.getElementById('sidebar-open-btn');
+
+  function setSidebarCollapsed(collapsed) {
+    sidebar.hidden = collapsed;
+    layout.classList.toggle('sidebar--collapsed', collapsed);
+    openBtn.hidden = !collapsed;
+    try { localStorage.setItem('mealPlannerSidebarCollapsed', collapsed ? '1' : '0'); } catch (e) {}
+  }
+
+  collapseBtn.addEventListener('click', function() { setSidebarCollapsed(true); });
+  openBtn.addEventListener('click', function() { setSidebarCollapsed(false); });
+
+  // Restore saved state
+  if (localStorage.getItem('mealPlannerSidebarCollapsed') === '1') {
+    setSidebarCollapsed(true);
+  }
+}());
+
 // Sidebar tab switching
 function switchSidebarTab(tab) {
   sidebarTab = tab;
