@@ -145,6 +145,10 @@ var effectiveWeekId = null;
 // syncFromServer will push local data to server instead of pulling.
 var recoveredFromNext = false;
 
+// Count of in-flight server saves. While > 0, syncFromServer must not overwrite
+// local plan with a stale server response that hasn't seen the local change yet.
+var pendingServerSaves = 0;
+
 // Which day the week starts on (configurable, default Friday)
 var startDay = 'fri';
 
@@ -394,11 +398,16 @@ function savePlan() {
     localStorage.setItem('mealPlannerHistory', JSON.stringify(history));
 
     // Sync to server in the background so other devices see the change
+    pendingServerSaves++;
     fetch(API_BASE + '/plan', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ current: entry, history: history })
-    }).catch(function() {}); // silently ignore if offline
+    }).then(function() {
+      pendingServerSaves--;
+    }).catch(function() {
+      pendingServerSaves--;
+    });
   } catch (e) {
     showToast('Error saving — storage may be full');
   }
@@ -555,6 +564,9 @@ function syncFromServer() {
       }
       var incomingCurr = JSON.stringify(data.current.plan);
       if (incomingCurr === JSON.stringify(currentPlan)) return;
+
+      // If a local save is in-flight, the server response is stale — skip.
+      if (pendingServerSaves > 0) return;
 
       // Never let a plan with fewer meals overwrite one with more.
       // If the server is empty and we have data locally, push ours up.
@@ -1142,7 +1154,7 @@ function renderWishesPanel() {
   ['dylan', 'zoe'].forEach(function(person) {
     var sub = wishlistData.submissions[person];
 
-    panel.appendChild(makeSectionHeader(person));
+    panel.appendChild(makeSectionHeader(person, 'wishes'));
 
     if (!sub) {
       var noSub = document.createElement('div');
@@ -1214,26 +1226,69 @@ function renderWishesPanel() {
 
 
 /**
- * Clear a single person's wishlist submission and re-render both panels + badges.
+ * Clear only the tab-relevant part of a person's wishlist submission.
+ * tab='wishes' clears picks; tab='tescos' clears notes.
+ * If nothing remains after the clear, the whole submission is deleted.
  */
-function clearPersonWishlist(person) {
-  fetch(API_BASE + '/wishlists/' + person, { method: 'DELETE' })
-    .then(function() {
-      if (wishlistData && wishlistData.submissions) {
-        delete wishlistData.submissions[person];
-      }
-      updateWishesBadge();
-      updateTescosBadge();
-      renderWishesPanel();
-      renderTescosPanel();
+function clearPersonTab(person, tab) {
+  var sub = wishlistData && wishlistData.submissions && wishlistData.submissions[person];
+  var weekId = (wishlistData && wishlistData.week_id) || getCustomWeekId(new Date());
+
+  var hasPicks = sub && ((sub.picks && sub.picks.length > 0) || (sub.custom_picks && sub.custom_picks.length > 0));
+  var hasNotes = sub && sub.notes && sub.notes.trim().length > 0;
+
+  var keepPicks = tab === 'tescos';  // clearing notes → keep picks
+  var keepNotes = tab === 'wishes';  // clearing picks → keep notes
+
+  var nothingLeft = (tab === 'wishes' && !hasNotes) || (tab === 'tescos' && !hasPicks);
+
+  function afterClear() {
+    updateWishesBadge();
+    updateTescosBadge();
+    renderWishesPanel();
+    renderTescosPanel();
+  }
+
+  if (nothingLeft) {
+    // Nothing left to keep — delete the whole submission
+    fetch(API_BASE + '/wishlists/' + person, { method: 'DELETE' })
+      .then(function() {
+        if (wishlistData && wishlistData.submissions) delete wishlistData.submissions[person];
+        afterClear();
+      })
+      .catch(function() { showToast('Could not clear'); });
+  } else {
+    // Overwrite keeping only the relevant part
+    var body = {
+      week_id: weekId,
+      picks: keepPicks && sub.picks ? sub.picks : [],
+      notes: keepNotes && sub.notes ? sub.notes : ''
+    };
+    fetch(API_BASE + '/wishlist/' + person, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
     })
-    .catch(function() { showToast('Could not clear'); });
+      .then(function() {
+        if (wishlistData && wishlistData.submissions && wishlistData.submissions[person]) {
+          if (tab === 'wishes') {
+            wishlistData.submissions[person].picks = [];
+            wishlistData.submissions[person].custom_picks = [];
+          } else {
+            wishlistData.submissions[person].notes = '';
+          }
+        }
+        afterClear();
+      })
+      .catch(function() { showToast('Could not clear'); });
+  }
 }
 
 /**
  * Build a section header row with a person label and inline clear button.
+ * tab controls which part gets cleared ('wishes' or 'tescos').
  */
-function makeSectionHeader(person) {
+function makeSectionHeader(person, tab) {
   var row = document.createElement('div');
   row.className = 'wishes-section-header-row';
   var label = document.createElement('span');
@@ -1244,9 +1299,9 @@ function makeSectionHeader(person) {
   var btn = document.createElement('button');
   btn.className = 'btn-clear-person';
   btn.textContent = 'Clear';
-  (function(p) {
-    btn.addEventListener('click', function() { clearPersonWishlist(p); });
-  })(person);
+  (function(p, t) {
+    btn.addEventListener('click', function() { clearPersonTab(p, t); });
+  })(person, tab);
   row.appendChild(btn);
   return row;
 }
@@ -1294,7 +1349,7 @@ function renderTescosPanel() {
     var items = parseTescosItems(sub && sub.notes);
     if (items.length === 0) return;
 
-    panel.appendChild(makeSectionHeader(p));
+    panel.appendChild(makeSectionHeader(p, 'tescos'));
 
     items.forEach(function(item) {
       var row = document.createElement('div');
@@ -1910,6 +1965,27 @@ function clearWeek() {
 }
 
 /**
+ * Advance to next week, copying the current plan's meals into it.
+ * The effective week ID moves forward 7 days; the old week stays in history.
+ */
+function startNewWeek() {
+  if (!confirm('Start next week with the same meal plan?')) return;
+
+  var currentId = effectiveWeekId || getCustomWeekId(new Date());
+  var nextStart = new Date(currentId + 'T12:00:00');
+  nextStart.setDate(nextStart.getDate() + 7);
+  var y = nextStart.getFullYear();
+  var m = String(nextStart.getMonth() + 1).padStart(2, '0');
+  var d = String(nextStart.getDate()).padStart(2, '0');
+  effectiveWeekId = y + '-' + m + '-' + d;
+
+  savePlan();
+  updateWeekLabel();
+  renderWeekGrid();
+  showToast('New week started — same meals carried forward');
+}
+
+/**
  * Change the start day of the week.
  * Saves preference and re-renders.
  */
@@ -1990,6 +2066,9 @@ document.addEventListener('keydown', function(e) {
     document.getElementById('pending-modal-overlay').hidden = true;
   }
 });
+
+// New week button
+document.getElementById('new-week-btn').addEventListener('click', startNewWeek);
 
 // Start day dropdown change
 document.getElementById('start-day-select').addEventListener('change', function() {

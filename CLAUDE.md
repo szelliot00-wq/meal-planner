@@ -23,6 +23,7 @@ SSH alias `macbookpro` is defined in `~/.ssh/config` (HostName 192.168.1.40, Use
 - Copy shopping list to clipboard (via shopping list modal)
 - Auto-save on every action (no Save button)
 - Week history in header dropdown — click current week label to see past weeks, click one to view/copy
+- **New Week** button in header — advances to the next week carrying the current meal plan forward (same meals, new week ID)
 - Recipe detail modal with instructions, timing, and source link
 - Google Sheets integration for recipe database (with hardcoded fallback)
 - Pending recipe review: discreet tab fixed at bottom-centre → approve or reject new recipes
@@ -96,7 +97,10 @@ The current week plan, history, and recipe version are stored in `plan.json` on 
 - **Server plan has fewer meals than local** → push local plan to server (prevents an empty device wiping a populated one)
 
 ### Server-side protection (in `main.py` `POST /plan`)
-The server **rejects** any save where the incoming plan has fewer filled slots than what's already stored. An empty device (e.g. iPhone shortcut with isolated localStorage) can never wipe a populated plan. Rejected saves are logged as warnings. The server also writes a rolling backup (`plan_backup_YYYYMMDD_HHMMSS.json`) on every non-empty save, keeping the last 5.
+The server rejects saves where the incoming plan has fewer filled slots **and** an older or equal `savedAt` timestamp than what's stored — guarding against a stale empty device wiping a populated plan. A newer `savedAt` always wins (genuine user action, e.g. intentional deletion). Different `weekId` always accepted. Rejected saves are logged as warnings. The server also writes a rolling backup (`plan_backup_YYYYMMDD_HHMMSS.json`) on every non-empty save, keeping the last 5.
+
+### In-flight save guard (client-side)
+`savePlan()` increments `pendingServerSaves` before each background POST and decrements it on completion. `syncFromServer()` skips overwriting local state while `pendingServerSaves > 0`, preventing a stale server response from reverting a just-made change before the save has landed.
 
 ### effectiveWeekId
 `app.js` tracks `effectiveWeekId` separately from `getCustomWeekId(new Date())`. On the last day of a week, the plan may already have been saved for the *next* week's ID. `effectiveWeekId` ensures saves, labels, and sync checks all use the correct ID. Loaded from whichever localStorage store (`mealPlannerCurrent` or legacy `mealPlannerNext`) has more filled slots.
@@ -126,7 +130,9 @@ Kids submit ranked meal picks at `/app/wishlist`. Daddy sees them in the **Wishe
 - Resets when week rolls over (Friday-based week ID); re-submitting overwrites only that kid's entry
 - `GET /wishlists` — returns current week's submissions
 - `POST /wishlist/{person}` — body: `{ picks: [mealIds], notes: string, week_id: string }`
+- `DELETE /wishlists/{person}` — delete a single person's submission
 - `GET /meals` — returns all recipes for the wishlist page (service account, no browser API key, 5-min cache)
+- The **Clear** button in each section header is tab-aware: on the Wishes tab it clears picks only; on the Tescos tab it clears notes only. If nothing remains after the partial clear, the whole submission is deleted.
 
 ## Weekly wishlist emails
 Every Wednesday at 14:00 the pipeline server sends a personalised email to each kid with their wishlist link, CC'd to Daddy. Runs as a background thread in `main.py` — no separate script or launchd agent.
@@ -140,7 +146,7 @@ Every Wednesday at 14:00 the pipeline server sends a personalised email to each 
 ## Gotchas
 - **Safari `[hidden]` bug**: browsers where author-stylesheet `display` overrides `[hidden]` (e.g. older iOS Safari). Fixed with `[hidden] { display: none !important; }` at top of `styles.css` and inside `wishlist.html`. Do not remove this rule.
 - **iOS home screen shortcut caching**: iPhone shortcuts have an isolated cache and localStorage separate from Safari. The FastAPI server (`main.py`) sends `Cache-Control: no-cache, no-store, must-revalidate` for all HTML responses via a middleware, so the shortcut always fetches fresh HTML. JS files are cache-busted with `?v=N` query strings in `index.html` — bump `N` whenever a breaking JS change is deployed.
-- **Script tag version**: `index.html` loads `app.js?v=2` and `config.js?v=2`. Increment both when deploying JS changes that must bypass the shortcut cache.
+- **Script tag version**: `index.html` loads `app.js?v=3` and `config.js?v=3`. Increment both when deploying JS changes that must bypass the shortcut cache.
 
 ## Rules
 - Keep things simple. No unnecessary libraries or frameworks.
