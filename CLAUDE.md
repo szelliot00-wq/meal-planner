@@ -6,14 +6,14 @@ A weekly meal planning web app for Daddy (Steve), Zbutt (Zoe), and Dyl-Boi (Dyla
 ## How to run
 Open `index.html` in a browser. No server or build step needed.
 
-Hosted on the spare MacBook Pro at `http://192.168.1.40:8090/app` via FastAPI/uvicorn (launchd agent `com.steveelliott.tiktok-recipes` on port 8090).
+Hosted on the spare MacBook Pro at `http://192.168.71.250:8090/app` via FastAPI/uvicorn (launchd agent `com.steveelliott.tiktok-recipes` on port 8090).
 
-⚠️ **Editing machine ≠ serving machine.** Code is edited on the main MacBook Air (`192.168.1.169`) but served from the spare MacBook Pro (`192.168.1.40`). After editing, copy changed files with:
+⚠️ **Editing machine ≠ serving machine.** Code is edited on the main MacBook Air (`192.168.1.169`) but served from the spare MacBook Pro (`192.168.71.250`). After editing, copy changed files with:
 ```bash
 scp -F ~/.ssh/config app.js styles.css index.html macbookpro:~/Claude-projects/meal-planner/
 scp -F ~/.ssh/config view/index.html macbookpro:~/Claude-projects/meal-planner/view/index.html
 ```
-SSH alias `macbookpro` is defined in `~/.ssh/config` (HostName 192.168.1.40, User steveelliott, IdentityFile ~/.ssh/macbook_pro). Project path on MacBook Pro: `~/Claude-projects/meal-planner/`.
+SSH alias `macbookpro` is defined in `~/.ssh/config` (HostName 192.168.71.250, User steveelliott, IdentityFile ~/.ssh/macbook_pro). Project path on MacBook Pro: `~/Claude-projects/meal-planner/`.
 
 ## Key features
 - Stacked single-page layout with all 7 days visible
@@ -141,7 +141,7 @@ Every Wednesday at 14:00 the pipeline server sends a personalised email to each 
 - **Zoe**: zmasterw5@gmail.com → `/app/wishlist?for=zoe`
 - **From**: Daddy (szelliot00@gmail.com)
 - Requires `GMAIL_FROM` and `GMAIL_APP_PASSWORD` in `.env` on MacBook Pro
-- `MEAL_PLANNER_BASE_URL` defaults to `http://192.168.1.40:8090`
+- `MEAL_PLANNER_BASE_URL` defaults to `http://192.168.71.250:8090`
 
 ## Gotchas
 - **Safari `[hidden]` bug**: browsers where author-stylesheet `display` overrides `[hidden]` (e.g. older iOS Safari). Fixed with `[hidden] { display: none !important; }` at top of `styles.css` and inside `wishlist.html`. Do not remove this rule.
