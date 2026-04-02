@@ -146,7 +146,7 @@ Every Wednesday at 14:00 the pipeline server sends a personalised email to each 
 ## Gotchas
 - **Safari `[hidden]` bug**: browsers where author-stylesheet `display` overrides `[hidden]` (e.g. older iOS Safari). Fixed with `[hidden] { display: none !important; }` at top of `styles.css` and inside `wishlist.html`. Do not remove this rule.
 - **iOS home screen shortcut caching**: iPhone shortcuts have an isolated cache and localStorage separate from Safari. The FastAPI server (`main.py`) sends `Cache-Control: no-cache, no-store, must-revalidate` for all HTML responses via a middleware, so the shortcut always fetches fresh HTML. JS files are cache-busted with `?v=N` query strings in `index.html` — bump `N` whenever a breaking JS change is deployed.
-- **Script tag version**: `index.html` loads `app.js?v=3` and `config.js?v=3`. Increment both when deploying JS changes that must bypass the shortcut cache.
+- **Script tag version**: `index.html` loads `app.js?v=5` and `config.js?v=5`. **Increment on every JS deployment** — the browser caches by URL so the version must change every time app.js is deployed, not just on "breaking" changes.
 
 ## Rules
 - Keep things simple. No unnecessary libraries or frameworks.

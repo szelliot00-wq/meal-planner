@@ -2062,6 +2062,9 @@ document.addEventListener('keydown', function(e) {
 // New week button
 document.getElementById('new-week-btn').addEventListener('click', startNewWeek);
 
+// Clear week button
+document.getElementById('clear-week-btn').addEventListener('click', clearWeek);
+
 // Start day dropdown change
 document.getElementById('start-day-select').addEventListener('change', function() {
   changeStartDay(this.value);

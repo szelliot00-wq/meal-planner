@@ -252,6 +252,11 @@ body {
   margin-bottom: 0;
 }
 
+.header-btn--danger {
+  color: #ef4444;
+  border-color: #fecaca;
+}
+
 /* ── Week dropdown ── */
 .week-dropdown { position: relative; }
 
