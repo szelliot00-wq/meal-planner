@@ -1807,10 +1807,12 @@ function closeWeekDropdown() {
  */
 function showHistoryModal(entry) {
   var titleEl = document.getElementById('history-modal-title');
-  titleEl.textContent = 'Week: ' + entry.weekLabel;
+  titleEl.textContent = 'Week: ' + (entry.weekLabel || entry.weekId || '');
 
   var container = document.getElementById('history-modal-content');
   container.innerHTML = '';
+
+  var plan = entry.plan || {};
 
   // Use ordered days for display
   var days = getOrderedDays();
@@ -1823,7 +1825,7 @@ function showHistoryModal(entry) {
       var assignments = [];
       PEOPLE.forEach(function(person) {
         var key = slotKey(day, mealTime, person);
-        var mealIds = entry.plan[key];
+        var mealIds = plan[key];
         if (!mealIds) return;
         if (typeof mealIds === 'string') mealIds = [mealIds]; // old format
         mealIds.forEach(function(mealId) {
@@ -1853,14 +1855,6 @@ function showHistoryModal(entry) {
   if (container.children.length === 0) {
     container.innerHTML = '<div class="shopping-empty">This week was empty</div>';
   }
-
-  // Wire up the "Copy to Current Week" button
-  var copyBtn = document.getElementById('copy-week-btn');
-  var newCopyBtn = copyBtn.cloneNode(true);
-  copyBtn.parentNode.replaceChild(newCopyBtn, copyBtn);
-  newCopyBtn.addEventListener('click', function() {
-    copyWeekForward(entry.plan);
-  });
 
   document.getElementById('history-modal-overlay').hidden = false;
 }
@@ -1969,8 +1963,6 @@ function clearWeek() {
  * The effective week ID moves forward 7 days; the old week stays in history.
  */
 function startNewWeek() {
-  if (!confirm('Start next week with the same meal plan?')) return;
-
   var currentId = effectiveWeekId || getCustomWeekId(new Date());
   var nextStart = new Date(currentId + 'T12:00:00');
   nextStart.setDate(nextStart.getDate() + 7);
