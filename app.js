@@ -568,11 +568,13 @@ function syncFromServer() {
       // If a local save is in-flight, the server response is stale — skip.
       if (pendingServerSaves > 0) return;
 
-      // Never let a plan with fewer meals overwrite one with more.
-      // If the server is empty and we have data locally, push ours up.
-      var serverFilled = countFilledSlots(data.current.plan);
-      var localFilled  = countFilledSlots(currentPlan);
-      if (serverFilled < localFilled) {
+      // Use savedAt timestamps to decide who wins. Local is newer → push;
+      // server is newer (or no local timestamp) → adopt server.
+      var serverSavedAt = data.current.savedAt || '';
+      var localEntry = null;
+      try { localEntry = JSON.parse(localStorage.getItem('mealPlannerCurrent')); } catch (e) {}
+      var localSavedAt = localEntry ? (localEntry.savedAt || '') : '';
+      if (localSavedAt > serverSavedAt) {
         savePlan();
         return;
       }
